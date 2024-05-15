@@ -1,0 +1,9 @@
+.env
+notion.db
+cmd/main
+project_internal.json
+time_client.json
+time_internal.json
+task_internal.json
+task_client.json
+workers_client.json
