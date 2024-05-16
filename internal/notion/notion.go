@@ -66,22 +66,26 @@ func GetPage(pageid string) ([]byte, error) {
 	return body, nil
 }
 
-func CreatePage(dbid string, properties map[string]interface{}) ([]byte, error) {
+func CreatePage(dbid string, properties interface{}, icon string) ([]byte, error) {
 	url := "https://api.notion.com/v1/pages"
 
-	data, err := json.Marshal(map[string]interface{}{
+	reqBody := map[string]interface{}{
 		"parent": map[string]interface{}{
 			"type":        "database_id",
 			"database_id": dbid,
 		},
-		"icon": map[string]interface{}{
+		"properties": properties,
+	}
+	if icons[icon] != "" {
+		reqBody["icon"] = map[string]interface{}{
 			"type": "external",
 			"external": map[string]interface{}{
-				"url": "https://previews.dropbox.com/p/thumb/ACSLWstuTUmidfjVhww2pOtk4vcIbna-VEasIXlNS_zNhqslGNaJNff_t_hcEIYmMzNnhVbprja2rHsl5etNR1giA-xRWz1akdAX19opW8giNglNgSAjOVijibYBa2UMNZbkvM2tkp2WG6xBrlIVrEY1wRT6rCQ1FaPG--oHazNJnOnh5-ZmchWhQebii0NuSZvA26UJUcYF-RiryWh2bJWbTuaBK5fE6oBcVze6tDywNepx1wmGLzUwIGPh-Smk72RmO4CyJHjaBROK9FmdIGElmmK0cfqDKqjYWMP8VAshUKhLmLTI06n2X1BSt0255s9pCJudNVutOLvVnQtQszmm/p.png",
+				"url": icons[icon],
 			},
-		},
-		"properties": properties,
-	})
+		}
+	}
+
+	data, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, err
 	}
@@ -132,4 +136,17 @@ func GetWorker(dbid, workerId string) (*Worker, error) {
 		return nil, fmt.Errorf("worker not found")
 	}
 	return &worker.Results[0], nil
+}
+
+var icons = map[string]string{
+	"iOS":     "https://i.postimg.cc/kGZPbxtx/ios.png",
+	"Flutter": "https://i.postimg.cc/0QVs8gkX/flutter.png",
+	"Android": "https://i.postimg.cc/0NqxndXn/android.png",
+	"Иерархическая задача": "https://i.postimg.cc/yYgHzrwn/queen.png",
+	"Дизайн":     "https://i.postimg.cc/hjDnW4B7/design.png",
+	"Backend":    "https://i.postimg.cc/6QLKm2DX/backend.png",
+	"Web":        "https://i.postimg.cc/t4FGsnRx/web.png",
+	"Менеджмент": "https://i.postimg.cc/FFn48Qn7/management.png",
+	"Sprint":     "https://i.postimg.cc/Qx2rNJDD/Vector.png",
+	"Meeting":    "https://i.postimg.cc/brdjr6dy/Group-5272.png",
 }

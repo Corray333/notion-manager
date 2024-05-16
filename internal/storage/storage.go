@@ -26,7 +26,7 @@ func (s *Storage) GetProjects() ([]project.Project, error) {
 
 func (s *Storage) GetClientID(internalID string) (string, error) {
 	var clientID string
-	err := s.DB.Get(&clientID, "SELECT client_id FROM projects WHERE ids = ?", internalID)
+	err := s.DB.Get(&clientID, "SELECT client_id FROM ids WHERE internal_id = ?", internalID)
 	return clientID, err
 }
 
@@ -34,4 +34,14 @@ func (s *Storage) GetInternalID(clientID string) (string, error) {
 	var internalID string
 	err := s.DB.Get(&internalID, "SELECT internal_id FROM ids WHERE client_id = ?", clientID)
 	return internalID, err
+}
+
+func (s *Storage) SetClientID(internalID, clientID string) error {
+	_, err := s.DB.Exec("INSERT INTO ids (internal_id, client_id) VALUES (?, ?)", internalID, clientID)
+	return err
+}
+
+func (s *Storage) SetLastSynced(lastSynced int64, projectId string) error {
+	_, err := s.DB.Exec("UPDATE projects SET last_synced = ? WHERE project_id = ?", lastSynced, projectId)
+	return err
 }

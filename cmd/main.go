@@ -1,11 +1,7 @@
 package main
 
 import (
-	"sync"
-
 	"github.com/Corray333/notion-manager/internal/config"
-	"github.com/Corray333/notion-manager/internal/notion"
-	"github.com/Corray333/notion-manager/internal/storage"
 )
 
 func main() {
@@ -18,30 +14,93 @@ func main() {
 	//
 	//
 
-	store := storage.NewStorage()
+	// resp, err := notion.SearchPages(os.Getenv("TASKS_DB"), map[string]interface{}{
+	// 	"start_cursor": "6d0d239a-4f40-4e51-bc87-d2c33f422efa",
+	// 	"filter": map[string]interface{}{
+	// 		"property": "Продукт",
+	// 		"relation": map[string]interface{}{
+	// 			"contains": "e754753f491b4fd58913d1fc51ce2f12",
+	// 		},
+	// 	},
+	// })
+	// if err != nil {
+	// 	panic(err)
+	// }
 
-	projects, err := store.GetProjects()
-	if err != nil {
-		panic(err)
-	}
-	var wg sync.WaitGroup
-	for _, project := range projects {
-		tasks, err := notion.GetTasks(store, project)
-		if err != nil {
-			panic(err)
-		}
-		for _, task := range tasks {
-			wg.Add(1)
-			go func() {
-				err := task.Upload(project)
-				if err != nil {
-					panic(err)
-				}
-				wg.Done()
-			}()
-		}
-	}
-	wg.Wait()
+	// tasks := struct {
+	// 	Results    []notion.Task `json:"results"`
+	// 	HasMore    bool          `json:"has_more"`
+	// 	NextCursor string        `json:"next_cursor"`
+	// }{}
+
+	// err = json.Unmarshal(resp, &tasks)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Println()
+	// fmt.Println(tasks.NextCursor)
+	// fmt.Println()
+
+	// store := storage.NewStorage()
+
+	// projects, err := store.GetProjects()
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// for _, project := range projects {
+	// 	var wg sync.WaitGroup
+	// 	startTime := time.Now().Unix()
+	// 	tasks, err := notion.GetTasks(store, project)
+	// 	if err != nil {
+	// 		panic(err)
+	// 	}
+	// 	fmt.Printf("Loaded %d tasks.", len(tasks))
+	// 	deferred := []notion.Task{}
+	// 	for _, task := range tasks {
+	// 		if len(task.Properties.ParentTask.Relation) == 0 {
+	// 			wg.Add(1)
+	// 			go func(task notion.Task) {
+	// 				err := task.Upload(store, project)
+	// 				if err != nil {
+	// 					panic(err)
+	// 				}
+	// 				wg.Done()
+	// 			}(task)
+	// 		} else {
+	// 			deferred = append(deferred, task)
+	// 		}
+	// 	}
+	// 	wg.Wait()
+	// 	for _, task := range deferred {
+	// 		wg.Add(1)
+	// 		go func() {
+	// 			err := task.Upload(store, project)
+	// 			if err != nil {
+	// 				panic(err)
+	// 			}
+	// 			wg.Done()
+	// 		}()
+	// 	}
+
+	// 	wg.Wait()
+
+	// 	times, err := notion.GetTimes(store, project)
+	// 	if err != nil {
+	// 		panic(err)
+	// 	}
+	// 	fmt.Printf("Loaded %d times.", len(times))
+	// 	for _, time := range times {
+	// 		wg.Add(1)
+	// 		go func() {
+	// 			if err := time.Upload(store, project); err != nil {
+	// 				panic(err)
+	// 			}
+	// 			wg.Done()
+	// 		}()
+	// 	}
+	// 	wg.Wait()
+	// 	store.SetLastSynced(startTime, project.ProjectID)
+	// }
 
 	//
 	//
