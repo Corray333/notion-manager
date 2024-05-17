@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"sync"
+
 	"github.com/Corray333/notion-manager/internal/project"
 	"github.com/jmoiron/sqlx"
 )
@@ -36,8 +38,12 @@ func (s *Storage) GetInternalID(clientID string) (string, error) {
 	return internalID, err
 }
 
+var mu = &sync.Mutex{}
+
 func (s *Storage) SetClientID(internalID, clientID string) error {
+	mu.Lock()
 	_, err := s.DB.Exec("INSERT INTO ids (internal_id, client_id) VALUES (?, ?)", internalID, clientID)
+	mu.Unlock()
 	return err
 }
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/Corray333/notion-manager/internal/project"
@@ -17,9 +18,9 @@ type Time struct {
 	NextCursor string `json:"next_cursor"`
 	Properties struct {
 		TotalHours struct {
-			ID     string `json:"id"`
-			Type   string `json:"type"`
-			Number int    `json:"number"`
+			ID     string  `json:"id"`
+			Type   string  `json:"type"`
+			Number float64 `json:"number"`
 		} `json:"Всего ч"`
 		Task struct {
 			ID       string `json:"id"`
@@ -119,8 +120,10 @@ type Worker struct {
 
 // Task
 type Task struct {
-	ID         string `json:"id"`
-	Properties struct {
+	Tries       int    `json:"tries"`
+	ID          string `json:"id"`
+	CreatedTime string `json:"created_time"`
+	Properties  struct {
 		Tags struct {
 			MultiSelect []struct {
 				Name string `json:"name"`
@@ -143,7 +146,8 @@ type Task struct {
 		} `json:"Приоритет"`
 		Worker struct {
 			People []struct {
-				ID string `json:"id"`
+				Name string `json:"name"`
+				ID   string `json:"id"`
 			} `json:"people"`
 		} `json:"Исполнитель"`
 		Product struct {
@@ -180,13 +184,19 @@ type Storage interface {
 	SetClientID(internalID, clientID string) error
 }
 
-func GetTasks(store Storage, project project.Project) ([]Task, error) {
+type GetTasksResponse struct {
+	Results    []Task `json:"results"`
+	HasMore    bool   `json:"has_more"`
+	NextCursor string `json:"next_cursor"`
+}
+
+func GetTasks(store Storage, project project.Project, cursor string) ([]Task, error) {
 	projectID, err := store.GetInternalID(project.ProjectID)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := SearchPages(os.Getenv("TASKS_DB"), map[string]interface{}{
+	req := map[string]interface{}{
 		"filter": map[string]interface{}{
 			"and": []map[string]interface{}{
 				{
@@ -203,48 +213,102 @@ func GetTasks(store Storage, project project.Project) ([]Task, error) {
 				},
 			},
 		},
-	})
+		"sorts": []map[string]interface{}{
+			{
+				"timestamp": "created_time",
+				"direction": "ascending",
+			},
+		},
+	}
+
+	if cursor != "" {
+		fmt.Println("Next cursor applied")
+		req["start_cursor"] = cursor
+	}
+
+	resp, err := SearchPages(os.Getenv("TASKS_DB"), req)
 	if err != nil {
 		return nil, err
 	}
 
-	tasks := struct {
-		Results    []Task `json:"results"`
-		HasMore    bool   `json:"has_more"`
-		NextCursor string `json:"next_cursor"`
-	}{}
+	tasks := GetTasksResponse{}
 
 	err = json.Unmarshal(resp, &tasks)
 	if err != nil {
 		return nil, err
 	}
+
+	if tasks.HasMore {
+		moreTasks, err := GetTasks(store, project, tasks.NextCursor)
+		if err != nil {
+			return nil, err
+		}
+		return append(tasks.Results, moreTasks...), nil
+	}
+
 	return tasks.Results, nil
 
 }
 
-func (t *Task) Upload(store Storage, project project.Project) error {
-	if len(t.Properties.Worker.People) == 0 {
-		return fmt.Errorf("no worker")
-	}
-	worker, err := GetWorker(project.WorkersDBID, t.Properties.Worker.People[0].ID)
+func CopyTask(store Storage, project project.Project, taskID string) error {
+	resp, err := GetPage(taskID)
 	if err != nil {
 		return err
+	}
+	fmt.Println("Response: ", string(resp))
+	var task Task
+	if err := json.Unmarshal(resp, &task); err != nil {
+		return err
+	}
+	return task.Upload(store, project)
+
+}
+
+var timeMu = &sync.Mutex{}
+
+func (t *Task) Upload(store Storage, project project.Project) error {
+
+	if _, err := store.GetClientID(t.ID); err == nil {
+		return nil
+	}
+
+	var worker *Worker
+	err := error(nil)
+	if len(t.Properties.Worker.People) != 0 {
+		// TODO: handle errors, except of worker not found
+		worker, _ = GetWorker(project.WorkersDBID, t.Properties.Worker.People[0].ID)
 	}
 
 	parentTask := []struct {
 		ID string `json:"id"`
 	}{}
 
-	if len(t.Properties.ParentTask.Relation) > 0 {
+	// Find parent task
+	if len(t.Properties.ParentTask.Relation) > 0 && t.Properties.ParentTask.Relation[0].ID != t.ID {
 		parentId, err := store.GetClientID(t.Properties.ParentTask.Relation[0].ID)
 		if err != nil {
-			return err
+			err = CopyTask(store, project, t.Properties.ParentTask.Relation[0].ID)
+			if err != nil {
+				return err
+			}
+			parentId, err = store.GetClientID(t.Properties.ParentTask.Relation[0].ID)
+			if err != nil {
+				return err
+			}
 		}
 		parentTask = append(parentTask, struct {
 			ID string `json:"id"`
 		}{
 			ID: parentId,
 		})
+	}
+
+	// TODO: add request constructor
+
+	if len(t.Properties.Task.Title) == 0 {
+		fmt.Println()
+		fmt.Println("GG:", t)
+		fmt.Println()
 	}
 
 	req := map[string]interface{}{
@@ -259,31 +323,8 @@ func (t *Task) Upload(store Storage, project project.Project) error {
 				},
 			},
 		},
-		"Статус": map[string]interface{}{
-			"status": map[string]interface{}{
-				"name": t.Properties.Status.Status.Name,
-			},
-		},
-		"Исполнитель": map[string]interface{}{
-			"relation": []map[string]interface{}{
-				{
-					"id": worker.ID,
-				},
-			},
-		},
-		"Приоритет": map[string]interface{}{
-			"select": map[string]interface{}{
-				"name": t.Properties.Priority.Select.Name,
-			},
-		},
 		"Оценка": map[string]interface{}{
 			"number": t.Properties.Estimated.Number,
-		},
-		"Дедлайн": map[string]interface{}{
-			"date": map[string]interface{}{
-				"start": t.Properties.Deadline.Date.Start,
-				"end":   t.Properties.Deadline.Date.End,
-			},
 		},
 		"Проект": map[string]interface{}{
 			"relation": []map[string]interface{}{
@@ -292,9 +333,49 @@ func (t *Task) Upload(store Storage, project project.Project) error {
 				},
 			},
 		},
-		"Родительская задача": map[string]interface{}{
+	}
+
+	if t.Properties.Status.Status.Name != "" {
+		req["Статус"] = map[string]interface{}{
+			"status": map[string]interface{}{
+				"name": t.Properties.Status.Status.Name,
+			},
+		}
+	}
+
+	if t.Properties.Priority.Select.Name != "" {
+		req["Приоритет"] = map[string]interface{}{
+			"select": map[string]interface{}{
+				"name": t.Properties.Priority.Select.Name,
+			},
+		}
+	}
+
+	if len(parentTask) > 0 && parentTask[0].ID != "" {
+		req["Родительская задача"] = map[string]interface{}{
 			"relation": parentTask,
-		},
+		}
+	}
+
+	deadline := map[string]interface{}{
+		"date": map[string]interface{}{},
+	}
+	if t.Properties.Deadline.Date.End != nil {
+		deadline["date"].(map[string]interface{})["end"] = t.Properties.Deadline.Date.End
+	}
+	if t.Properties.Deadline.Date.Start != "" {
+		deadline["date"].(map[string]interface{})["start"] = t.Properties.Deadline.Date.Start
+		req["Дедлайн"] = deadline
+	}
+
+	if worker != nil {
+		req["Исполнитель"] = map[string]interface{}{
+			"relation": []map[string]interface{}{
+				{
+					"id": worker.ID,
+				},
+			},
+		}
 	}
 
 	// Find icon. It depends on tag, but it is "Иерархическая задача" if it has subtasks
@@ -310,10 +391,6 @@ func (t *Task) Upload(store Storage, project project.Project) error {
 		return err
 	}
 
-	fmt.Println()
-	fmt.Println(string(test))
-	fmt.Println()
-
 	var response struct {
 		ID string `json:"id"`
 	}
@@ -322,8 +399,15 @@ func (t *Task) Upload(store Storage, project project.Project) error {
 		return err
 	}
 	if err := store.SetClientID(t.ID, response.ID); err != nil {
-		return err
+		return fmt.Errorf("failed to save task in db: %w", err)
 	}
+
+	timeMu.Lock()
+	created_at, _ := time.Parse(TIME_LAYOUT, t.CreatedTime)
+	if project.LastSynced < created_at.Unix() {
+		project.LastSynced = created_at.Unix()
+	}
+	timeMu.Unlock()
 
 	return err
 }

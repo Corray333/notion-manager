@@ -133,7 +133,7 @@ func GetWorker(dbid, workerId string) (*Worker, error) {
 	}{}
 	json.Unmarshal(resp, &worker)
 	if len(worker.Results) == 0 {
-		return nil, fmt.Errorf("worker not found")
+		return nil, fmt.Errorf("worker not found: %s", string(resp))
 	}
 	return &worker.Results[0], nil
 }

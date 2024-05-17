@@ -8,7 +8,7 @@ import (
 )
 
 func MustInit() *sqlx.DB {
-	db, err := sqlx.Connect("sqlite3", "../notion.db")
+	db, err := sqlx.Connect("sqlite3", "../notion.db?_busy_timeout=5000")
 	if err != nil {
 		slog.Error(err.Error())
 		panic(err)
