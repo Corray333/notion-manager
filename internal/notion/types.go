@@ -1,7 +1,9 @@
 package notion
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -11,6 +13,8 @@ import (
 )
 
 const TIME_LAYOUT = "2006-01-02T15:04:05.000-07:00"
+
+const overflow = false
 
 type Time struct {
 	ID         string `json:"id"`
@@ -195,14 +199,13 @@ func GetTasks(store Storage, project project.Project, cursor string) ([]Task, er
 	if err != nil {
 		return nil, err
 	}
-
 	req := map[string]interface{}{
 		"filter": map[string]interface{}{
 			"and": []map[string]interface{}{
 				{
 					"timestamp": "created_time",
 					"created_time": map[string]interface{}{
-						"on_or_after": time.Unix(project.LastSynced, 0).Format(TIME_LAYOUT),
+						"on_or_after": time.Unix(project.TasksLastSynced, 0).Format(TIME_LAYOUT),
 					},
 				},
 				{
@@ -250,32 +253,17 @@ func GetTasks(store Storage, project project.Project, cursor string) ([]Task, er
 
 }
 
-func CopyTask(store Storage, project project.Project, taskID string) error {
-	resp, err := GetPage(taskID)
-	if err != nil {
-		return err
-	}
-	fmt.Println("Response: ", string(resp))
-	var task Task
-	if err := json.Unmarshal(resp, &task); err != nil {
-		return err
-	}
-	return task.Upload(store, project)
+var mu = &sync.Mutex{}
 
-}
-
-var timeMu = &sync.Mutex{}
-
-func (t *Task) Upload(store Storage, project project.Project) error {
-
-	if _, err := store.GetClientID(t.ID); err == nil {
+func (t *Task) Upload(store Storage, project *project.Project) error {
+	if _, err := store.GetClientID(t.ID); err != sql.ErrNoRows {
 		return nil
 	}
 
 	var worker *Worker
 	err := error(nil)
 	if len(t.Properties.Worker.People) != 0 {
-		// TODO: handle errors, except of worker not found
+		// TODO: handle errors
 		worker, _ = GetWorker(project.WorkersDBID, t.Properties.Worker.People[0].ID)
 	}
 
@@ -287,13 +275,25 @@ func (t *Task) Upload(store Storage, project project.Project) error {
 	if len(t.Properties.ParentTask.Relation) > 0 && t.Properties.ParentTask.Relation[0].ID != t.ID {
 		parentId, err := store.GetClientID(t.Properties.ParentTask.Relation[0].ID)
 		if err != nil {
-			err = CopyTask(store, project, t.Properties.ParentTask.Relation[0].ID)
+			if err != sql.ErrNoRows {
+				return err
+			}
+			resp, err := GetPage(t.Properties.ParentTask.Relation[0].ID)
 			if err != nil {
 				return err
 			}
+			var task Task
+			if err := json.Unmarshal(resp, &task); err != nil {
+				return err
+			}
+
+			if err := task.Upload(store, project); err != nil {
+				return err
+			}
+
 			parentId, err = store.GetClientID(t.Properties.ParentTask.Relation[0].ID)
 			if err != nil {
-				return err
+				return errors.Join()
 			}
 		}
 		parentTask = append(parentTask, struct {
@@ -303,13 +303,7 @@ func (t *Task) Upload(store Storage, project project.Project) error {
 		})
 	}
 
-	// TODO: add request constructor
-
-	if len(t.Properties.Task.Title) == 0 {
-		fmt.Println()
-		fmt.Println("GG:", t)
-		fmt.Println()
-	}
+	// TODO: add request constructorПип
 
 	req := map[string]interface{}{
 		"Name": map[string]interface{}{
@@ -394,20 +388,19 @@ func (t *Task) Upload(store Storage, project project.Project) error {
 	var response struct {
 		ID string `json:"id"`
 	}
+	err = json.Unmarshal(test, &response)
 
-	if err = json.Unmarshal(test, &response); err != nil {
+	if err != nil {
 		return err
 	}
+
 	if err := store.SetClientID(t.ID, response.ID); err != nil {
 		return fmt.Errorf("failed to save task in db: %w", err)
 	}
-
-	timeMu.Lock()
 	created_at, _ := time.Parse(TIME_LAYOUT, t.CreatedTime)
-	if project.LastSynced < created_at.Unix() {
-		project.LastSynced = created_at.Unix()
+	if project.TasksLastSynced < created_at.Unix() {
+		project.TasksLastSynced = created_at.Unix()
 	}
-	timeMu.Unlock()
 
 	return err
 }
@@ -424,7 +417,7 @@ func GetTimes(store Storage, project project.Project) ([]Time, error) {
 				{
 					"timestamp": "created_time",
 					"created_time": map[string]interface{}{
-						"on_or_after": time.Unix(project.LastSynced, 0).Format(TIME_LAYOUT),
+						"on_or_after": time.Unix(project.TimeLastSynced, 0).Format(TIME_LAYOUT),
 					},
 				},
 				{

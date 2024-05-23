@@ -7,12 +7,13 @@ import (
 )
 
 type Project struct {
-	ProjectID   string `db:"project_id"`
-	Name        string `db:"name"`
-	TimeDBID    string `db:"time_db_id"`
-	TasksDBID   string `db:"tasks_db_id"`
-	WorkersDBID string `db:"workers_db_id"`
-	LastSynced  int64  `db:"last_synced"`
+	ProjectID       string `db:"project_id"`
+	Name            string `db:"name"`
+	TimeDBID        string `db:"time_db_id"`
+	TasksDBID       string `db:"tasks_db_id"`
+	WorkersDBID     string `db:"workers_db_id"`
+	TasksLastSynced int64  `db:"tasks_last_synced"`
+	TimeLastSynced  int64  `db:"time_last_synced"`
 }
 
 func (p *Project) Update(client notionapi.Client) error {

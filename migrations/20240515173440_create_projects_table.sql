@@ -5,8 +5,10 @@ CREATE TABLE IF NOT EXISTS projects (
     name VARCHAR(80) ,
 	time_db_id VARCHAR(80) ,
 	tasks_db_id VARCHAR(80) ,
-	workers_db_id VARCHAR(80) ,
-	last_synced BIGINT
+	workers_db_id VARCHAR(80),
+	tasks_last_synced BIGINT,
+	time_last_synced BIGINT
+
 );
 -- +goose StatementEnd
 

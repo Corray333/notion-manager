@@ -1,28 +1,32 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
-	"sync"
 
 	"github.com/Corray333/notion-manager/internal/config"
 	"github.com/Corray333/notion-manager/internal/notion"
+	"github.com/Corray333/notion-manager/internal/project"
 	"github.com/Corray333/notion-manager/internal/storage"
 )
 
-type Queue []*notion.Task
+type TableType string
 
-func (q *Queue) Enqueue(v *notion.Task) {
-	*q = append(*q, v)
+const (
+	TimeTable TableType = "time"
+	TaskTable TableType = "task"
+)
+
+type Error struct {
+	err        error
+	project    project.Project
+	table_type TableType
+	id         string
 }
 
-func (q *Queue) Dequeue() (*notion.Task, bool) {
-	if len(*q) == 0 {
-		return nil, false
-	}
-	item := (*q)[0]
-	*q = (*q)[1:]
-	return item, true
+func (e Error) String() string {
+	return fmt.Sprintf("Error: %s, Table: %s, Project: %s, ID: %s", e.err.Error(), e.table_type, e.project.Name, e.id)
 }
 
 func main() {
@@ -35,46 +39,57 @@ func main() {
 		panic(err)
 	}
 
-	errs := []string{}
+	errs := []Error{}
 
 	for _, project := range projects {
-		var wg sync.WaitGroup
+		project.TasksLastSynced = 1668038400
 		tasks, err := notion.GetTasks(store, project, "")
 		if err != nil {
-			panic(err)
+			errs = append(errs, Error{
+				err:        errors.Join(errors.New("error while getting tasks: "), err),
+				table_type: TaskTable,
+				project:    project,
+			})
 		}
 		fmt.Printf("Loaded %d tasks.\n", len(tasks))
 		for _, task := range tasks {
-			wg.Add(1)
-			go func(task notion.Task) {
-				err := task.Upload(store, project)
-				if err != nil {
-					errs = append(errs, err.Error())
-				}
-				wg.Done()
-			}(task)
+			err := task.Upload(store, &project)
+			if err != nil {
+				fmt.Println(err.Error())
+				errs = append(errs, Error{
+					err:        err,
+					table_type: TaskTable,
+					project:    project,
+					id:         task.ID,
+				})
+			}
 		}
-		wg.Wait()
 
-		// times, err := notion.GetTimes(store, project)
-		// if err != nil {
-		// 	panic(err)
-		// }
-		// fmt.Printf("Loaded %d times.", len(times))
-		// for _, time := range times {
-		// 	wg.Add(1)
-		// 	go func() {
-		// 		if err := time.Upload(store, project); err != nil {
-		// 			panic(err)
-		// 		}
-		// 		wg.Done()
-		// 	}()
-		// }
-		// wg.Wait()
-		store.SetLastSynced(project.LastSynced, project.ProjectID)
+		times, err := notion.GetTimes(store, project)
+		if err != nil {
+			errs = append(errs, Error{
+				err:        errors.Join(errors.New("error while getting time rows: "), err),
+				table_type: TimeTable,
+				project:    project,
+			})
+		}
+		fmt.Printf("Loaded %d times.", len(times))
+		for _, time := range times {
+			if err := time.Upload(store, project); err != nil {
+				fmt.Println(err.Error())
+				errs = append(errs, Error{
+					err:        err,
+					table_type: TaskTable,
+					project:    project,
+					id:         time.ID,
+				})
+			}
+		}
+
+		store.SetLastSynced(project)
 		logs, _ := os.Create("logs.txt")
 		for _, err := range errs {
-			logs.WriteString(err + "\n")
+			logs.WriteString(err.String() + "\n")
 		}
 		logs.Close()
 	}
