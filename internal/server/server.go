@@ -24,6 +24,7 @@ func (a *App) Run() {
 	store := storage.NewStorage()
 
 	router.Post("/projects", handlers.NewProject(store))
+	router.Patch("/sync", handlers.UpdateDatabases(store))
 
 	slog.Info("Starting server on port " + viper.GetString("PORT"))
 	if err := http.ListenAndServe(viper.GetString("PORT"), router); err != nil {

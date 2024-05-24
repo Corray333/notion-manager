@@ -1,7 +1,9 @@
 package storage
 
 import (
+	"github.com/Corray333/notion-manager/internal/notion"
 	"github.com/Corray333/notion-manager/internal/project"
+	"github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -43,5 +45,18 @@ func (s *Storage) SetClientID(internalID, clientID string) error {
 
 func (s *Storage) SetLastSynced(project project.Project) error {
 	_, err := s.DB.Exec("UPDATE projects SET tasks_last_synced = ?, time_last_synced = ? WHERE project_id = ?", project.TasksLastSynced, project.TimeLastSynced, project.ProjectID)
+	return err
+}
+
+func (s *Storage) SaveErrors(errs []notion.Error) error {
+	query := squirrel.Insert("errors").Columns("project_id", "type", "message", "page_id")
+	for _, err := range errs {
+		query = query.Values(err.Unpack())
+	}
+	sql, args, err := query.ToSql()
+	if err != nil {
+		return err
+	}
+	_, err = s.DB.Exec(sql, args...)
 	return err
 }

@@ -265,7 +265,7 @@ func (t *Task) Upload(store Storage, project *project.Project) error {
 		icon = "Иерархическая задача"
 	}
 
-	test, err := CreatePage(project.TasksDBID, req, icon)
+	resp, err := CreatePage(project.TasksDBID, req, icon)
 	if err != nil {
 		return err
 	}
@@ -273,7 +273,7 @@ func (t *Task) Upload(store Storage, project *project.Project) error {
 	var response struct {
 		ID string `json:"id"`
 	}
-	err = json.Unmarshal(test, &response)
+	err = json.Unmarshal(resp, &response)
 
 	if err != nil {
 		return err
@@ -283,7 +283,6 @@ func (t *Task) Upload(store Storage, project *project.Project) error {
 		return fmt.Errorf("failed to save task in db: %w", err)
 	}
 	created_at, _ := time.Parse(TIME_LAYOUT_IN, t.CreatedTime)
-	fmt.Println("Task created at: ", project.TasksLastSynced, created_at.Unix(), t.CreatedTime)
 	if project.TasksLastSynced < created_at.Unix() {
 		project.TasksLastSynced = created_at.Unix()
 	}

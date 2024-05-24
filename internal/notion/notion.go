@@ -34,10 +34,16 @@ func (e Error) String() string {
 	return fmt.Sprintf("Error: %s, Table: %s, Project: %s, ID: %s", e.err.Error(), e.table_type, e.project.Name, e.id)
 }
 
+func (err Error) Unpack() (string, string, string, string) {
+	return err.project.ProjectID,
+		string(err.table_type),
+		err.err.Error(),
+		err.id
+}
+
 // Task
 type Storage interface {
 	GetProjects() ([]project.Project, error)
-	GetLastSynced(project project.Project) (string, error)
 	SetLastSynced(project project.Project) error
 	GetClientID(internalID string) (string, error)
 	GetInternalID(clientID string) (string, error)
@@ -208,13 +214,13 @@ func CreatePage(dbid string, properties interface{}, icon string) ([]byte, error
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("notion error %s while creating page with properties %s", err.Error(), string(data))
-	}
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("notion error %s while creating page with properties %s", string(body), string(data))
 	}
 
 	return body, nil
