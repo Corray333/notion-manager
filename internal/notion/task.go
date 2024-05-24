@@ -3,128 +3,14 @@ package notion
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/Corray333/notion-manager/internal/project"
 )
 
-const TIME_LAYOUT = "2006-01-02T15:04:05.000-07:00"
-
-const overflow = false
-
-type Time struct {
-	ID         string `json:"id"`
-	HasMore    bool   `json:"has_more"`
-	NextCursor string `json:"next_cursor"`
-	Properties struct {
-		TotalHours struct {
-			ID     string  `json:"id"`
-			Type   string  `json:"type"`
-			Number float64 `json:"number"`
-		} `json:"Всего ч"`
-		Task struct {
-			ID       string `json:"id"`
-			Type     string `json:"type"`
-			Relation []struct {
-				ID string `json:"id"`
-			} `json:"relation"`
-		} `json:"Задача"`
-		WorkDate struct {
-			ID   string `json:"id"`
-			Type string `json:"type"`
-			Date struct {
-				Start    string      `json:"start"`
-				End      interface{} `json:"end"`
-				TimeZone interface{} `json:"time_zone"`
-			} `json:"date"`
-		} `json:"Дата работ"`
-		WhatDid struct {
-			ID    string `json:"id"`
-			Type  string `json:"type"`
-			Title []struct {
-				Type string `json:"type"`
-				Text struct {
-					Content string      `json:"content"`
-					Link    interface{} `json:"link"`
-				} `json:"text"`
-				Annotations struct {
-					Bold          bool   `json:"bold"`
-					Italic        bool   `json:"italic"`
-					Strikethrough bool   `json:"strikethrough"`
-					Underline     bool   `json:"underline"`
-					Code          bool   `json:"code"`
-					Color         string `json:"color"`
-				} `json:"annotations"`
-				PlainText string      `json:"plain_text"`
-				Href      interface{} `json:"href"`
-			} `json:"title"`
-		} `json:"Что делали"`
-	}
-}
-
-// Worker
-type Worker struct {
-	ID         string `json:"id"`
-	Properties struct {
-		Link struct {
-			ID     string `json:"id"`
-			Type   string `json:"type"`
-			People []struct {
-				Object    string `json:"object"`
-				ID        string `json:"id"`
-				Name      string `json:"name"`
-				AvatarURL string `json:"avatar_url"`
-				Type      string `json:"type"`
-				Person    struct {
-					Email string `json:"email"`
-				} `json:"person"`
-			} `json:"people"`
-		} `json:"Ссылка"`
-		Salary struct {
-			ID     string `json:"id"`
-			Type   string `json:"type"`
-			Number int    `json:"number"`
-		} `json:"Ставка в час"`
-		Direction struct {
-			ID     string `json:"id"`
-			Type   string `json:"type"`
-			Select struct {
-				ID    string `json:"id"`
-				Name  string `json:"name"`
-				Color string `json:"color"`
-			} `json:"select"`
-		} `json:"Направление"`
-		Name struct {
-			ID    string `json:"id"`
-			Type  string `json:"type"`
-			Title []struct {
-				Type string `json:"type"`
-				Text struct {
-					Content string      `json:"content"`
-					Link    interface{} `json:"link"`
-				} `json:"text"`
-				Annotations struct {
-					Bold          bool   `json:"bold"`
-					Italic        bool   `json:"italic"`
-					Strikethrough bool   `json:"strikethrough"`
-					Underline     bool   `json:"underline"`
-					Code          bool   `json:"code"`
-					Color         string `json:"color"`
-				} `json:"annotations"`
-				PlainText string      `json:"plain_text"`
-				Href      interface{} `json:"href"`
-			} `json:"title"`
-		} `json:"Name"`
-	}
-}
-
-// Task
 type Task struct {
-	Tries       int    `json:"tries"`
 	ID          string `json:"id"`
 	CreatedTime string `json:"created_time"`
 	Properties  struct {
@@ -182,12 +68,6 @@ type Task struct {
 	} `json:"properties"`
 }
 
-type Storage interface {
-	GetClientID(internalID string) (string, error)
-	GetInternalID(clientID string) (string, error)
-	SetClientID(internalID, clientID string) error
-}
-
 type GetTasksResponse struct {
 	Results    []Task `json:"results"`
 	HasMore    bool   `json:"has_more"`
@@ -205,7 +85,7 @@ func GetTasks(store Storage, project project.Project, cursor string) ([]Task, er
 				{
 					"timestamp": "created_time",
 					"created_time": map[string]interface{}{
-						"on_or_after": time.Unix(project.TasksLastSynced, 0).Format(TIME_LAYOUT),
+						"after": time.Unix(project.TasksLastSynced, 0).Format(TIME_LAYOUT),
 					},
 				},
 				{
@@ -225,7 +105,6 @@ func GetTasks(store Storage, project project.Project, cursor string) ([]Task, er
 	}
 
 	if cursor != "" {
-		fmt.Println("Next cursor applied")
 		req["start_cursor"] = cursor
 	}
 
@@ -253,18 +132,11 @@ func GetTasks(store Storage, project project.Project, cursor string) ([]Task, er
 
 }
 
-var mu = &sync.Mutex{}
-
-func (t *Task) Upload(store Storage, project *project.Project) error {
-	if _, err := store.GetClientID(t.ID); err != sql.ErrNoRows {
-		return nil
-	}
-
+func (t *Task) ConstructRequest(store Storage, project *project.Project) (map[string]interface{}, error) {
 	var worker *Worker
-	err := error(nil)
 	if len(t.Properties.Worker.People) != 0 {
 		// TODO: handle errors
-		worker, _ = GetWorker(project.WorkersDBID, t.Properties.Worker.People[0].ID)
+		worker, _ = getWorker(project.WorkersDBID, t.Properties.Worker.People[0].ID)
 	}
 
 	parentTask := []struct {
@@ -276,24 +148,24 @@ func (t *Task) Upload(store Storage, project *project.Project) error {
 		parentId, err := store.GetClientID(t.Properties.ParentTask.Relation[0].ID)
 		if err != nil {
 			if err != sql.ErrNoRows {
-				return err
+				return nil, err
 			}
 			resp, err := GetPage(t.Properties.ParentTask.Relation[0].ID)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			var task Task
 			if err := json.Unmarshal(resp, &task); err != nil {
-				return err
+				return nil, err
 			}
 
 			if err := task.Upload(store, project); err != nil {
-				return err
+				return nil, err
 			}
 
 			parentId, err = store.GetClientID(t.Properties.ParentTask.Relation[0].ID)
 			if err != nil {
-				return errors.Join()
+				return nil, err
 			}
 		}
 		parentTask = append(parentTask, struct {
@@ -371,6 +243,19 @@ func (t *Task) Upload(store Storage, project *project.Project) error {
 			},
 		}
 	}
+	return req, nil
+
+}
+
+func (t *Task) Upload(store Storage, project *project.Project) error {
+	if _, err := store.GetClientID(t.ID); err != sql.ErrNoRows {
+		return nil
+	}
+
+	req, err := t.ConstructRequest(store, project)
+	if err != nil {
+		return nil
+	}
 
 	// Find icon. It depends on tag, but it is "Иерархическая задача" if it has subtasks
 	var icon string
@@ -397,90 +282,11 @@ func (t *Task) Upload(store Storage, project *project.Project) error {
 	if err := store.SetClientID(t.ID, response.ID); err != nil {
 		return fmt.Errorf("failed to save task in db: %w", err)
 	}
-	created_at, _ := time.Parse(TIME_LAYOUT, t.CreatedTime)
+	created_at, _ := time.Parse(TIME_LAYOUT_IN, t.CreatedTime)
+	fmt.Println("Task created at: ", project.TasksLastSynced, created_at.Unix(), t.CreatedTime)
 	if project.TasksLastSynced < created_at.Unix() {
 		project.TasksLastSynced = created_at.Unix()
 	}
-
-	return err
-}
-
-func GetTimes(store Storage, project project.Project) ([]Time, error) {
-	projectID, err := store.GetInternalID(project.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := SearchPages(os.Getenv("TIME_DB"), map[string]interface{}{
-		"filter": map[string]interface{}{
-			"and": []map[string]interface{}{
-				{
-					"timestamp": "created_time",
-					"created_time": map[string]interface{}{
-						"on_or_after": time.Unix(project.TimeLastSynced, 0).Format(TIME_LAYOUT),
-					},
-				},
-				{
-					"property": "Проект",
-					"rollup": map[string]interface{}{
-						"any": map[string]interface{}{
-							"relation": map[string]interface{}{
-								"contains": projectID,
-							},
-						},
-					},
-				},
-			},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	times := struct {
-		Results    []Time `json:"results"`
-		HasMore    bool   `json:"has_more"`
-		NextCursor string `json:"next_cursor"`
-	}{}
-
-	err = json.Unmarshal(resp, &times)
-	if err != nil {
-		return nil, err
-	}
-	return times.Results, nil
-}
-
-func (t *Time) Upload(store Storage, project project.Project) error {
-
-	task, err := store.GetClientID(t.Properties.Task.Relation[0].ID)
-	if err != nil {
-		return err
-	}
-
-	req := map[string]interface{}{
-		"Name": map[string]interface{}{
-			"type": "title",
-			"title": []map[string]interface{}{
-				{
-					"type": "text",
-					"text": map[string]interface{}{
-						"content": t.Properties.WhatDid.Title[0].PlainText,
-					},
-				},
-			},
-		},
-		"Всего ч": map[string]interface{}{
-			"number": t.Properties.TotalHours.Number,
-		},
-		"Задача": map[string]interface{}{
-			"relation": []map[string]interface{}{
-				{
-					"id": task,
-				},
-			},
-		},
-	}
-
-	_, err = CreatePage(project.TimeDBID, req, "")
 
 	return err
 }

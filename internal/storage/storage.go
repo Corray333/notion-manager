@@ -42,6 +42,6 @@ func (s *Storage) SetClientID(internalID, clientID string) error {
 }
 
 func (s *Storage) SetLastSynced(project project.Project) error {
-	_, err := s.DB.Exec("UPDATE projects SET tasks_last_update = ?, time_last_update = ? WHERE project_id = ?", project.TasksLastSynced, project.TimeLastSynced, project.ProjectID)
+	_, err := s.DB.Exec("UPDATE projects SET tasks_last_synced = ?, time_last_synced = ? WHERE project_id = ?", project.TasksLastSynced, project.TimeLastSynced, project.ProjectID)
 	return err
 }

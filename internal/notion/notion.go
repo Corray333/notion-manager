@@ -3,11 +3,109 @@ package notion
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+
+	"github.com/Corray333/notion-manager/internal/project"
 )
+
+const TIME_LAYOUT = "2006-01-02T15:04:05.000-07:00"
+const TIME_LAYOUT_IN = "2006-01-02T15:04:05.999Z07:00"
+
+type TableType string
+
+const (
+	TimeTable    TableType = "time"
+	TaskTable    TableType = "task"
+	ProjectTable TableType = "project"
+)
+
+type Error struct {
+	err        error
+	project    project.Project
+	table_type TableType
+	id         string
+}
+
+func (e Error) String() string {
+	return fmt.Sprintf("Error: %s, Table: %s, Project: %s, ID: %s", e.err.Error(), e.table_type, e.project.Name, e.id)
+}
+
+// Task
+type Storage interface {
+	GetProjects() ([]project.Project, error)
+	GetLastSynced(project project.Project) (string, error)
+	SetLastSynced(project project.Project) error
+	GetClientID(internalID string) (string, error)
+	GetInternalID(clientID string) (string, error)
+	SetClientID(internalID, clientID string) error
+}
+
+func StartSync(store Storage) []Error {
+	projects, err := store.GetProjects()
+	if err != nil {
+		panic(err)
+	}
+
+	errs := []Error{}
+
+	for _, project := range projects {
+		tasks, err := GetTasks(store, project, "")
+		if err != nil {
+			errs = append(errs, Error{
+				err:        errors.Join(errors.New("error while getting tasks: "), err),
+				table_type: TaskTable,
+				project:    project,
+			})
+		}
+		fmt.Printf("Loaded %d tasks.\n", len(tasks))
+		for _, task := range tasks {
+			err := task.Upload(store, &project)
+			if err != nil {
+				fmt.Println(err.Error())
+				errs = append(errs, Error{
+					err:        err,
+					table_type: TaskTable,
+					project:    project,
+					id:         task.ID,
+				})
+			}
+		}
+
+		times, err := GetTimes(store, project, "")
+		if err != nil {
+			errs = append(errs, Error{
+				err:        errors.Join(errors.New("error while getting time rows: "), err),
+				table_type: TimeTable,
+				project:    project,
+			})
+		}
+		fmt.Printf("Loaded %d times.", len(times))
+		for _, time := range times {
+			if err := time.Upload(store, project); err != nil {
+				fmt.Println(err.Error())
+				errs = append(errs, Error{
+					err:        err,
+					table_type: TaskTable,
+					project:    project,
+					id:         time.ID,
+				})
+			}
+		}
+
+		if err := store.SetLastSynced(project); err != nil {
+			errs = append(errs, Error{
+				err:        err,
+				table_type: ProjectTable,
+				project:    project,
+			})
+		}
+	}
+	return errs
+}
 
 func SearchPages(dbid string, filter map[string]interface{}) ([]byte, error) {
 	url := "https://api.notion.com/v1/databases/" + dbid + "/query"
@@ -110,6 +208,10 @@ func CreatePage(dbid string, properties interface{}, icon string) ([]byte, error
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("notion error %s while creating page with properties %s", err.Error(), string(data))
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -118,7 +220,7 @@ func CreatePage(dbid string, properties interface{}, icon string) ([]byte, error
 	return body, nil
 }
 
-func GetWorker(dbid, workerId string) (*Worker, error) {
+func getWorker(dbid, workerId string) (*Worker, error) {
 	filter := map[string]interface{}{
 		"filter": map[string]interface{}{
 			"property": "Ссылка",
@@ -153,4 +255,60 @@ var icons = map[string]string{
 	"Менеджмент": "https://i.postimg.cc/FFn48Qn7/management.png",
 	"Sprint":     "https://i.postimg.cc/Qx2rNJDD/Vector.png",
 	"Meeting":    "https://i.postimg.cc/brdjr6dy/Group-5272.png",
+}
+
+// Worker
+type Worker struct {
+	ID         string `json:"id"`
+	Properties struct {
+		Link struct {
+			ID     string `json:"id"`
+			Type   string `json:"type"`
+			People []struct {
+				Object    string `json:"object"`
+				ID        string `json:"id"`
+				Name      string `json:"name"`
+				AvatarURL string `json:"avatar_url"`
+				Type      string `json:"type"`
+				Person    struct {
+					Email string `json:"email"`
+				} `json:"person"`
+			} `json:"people"`
+		} `json:"Ссылка"`
+		Salary struct {
+			ID     string `json:"id"`
+			Type   string `json:"type"`
+			Number int    `json:"number"`
+		} `json:"Ставка в час"`
+		Direction struct {
+			ID     string `json:"id"`
+			Type   string `json:"type"`
+			Select struct {
+				ID    string `json:"id"`
+				Name  string `json:"name"`
+				Color string `json:"color"`
+			} `json:"select"`
+		} `json:"Направление"`
+		Name struct {
+			ID    string `json:"id"`
+			Type  string `json:"type"`
+			Title []struct {
+				Type string `json:"type"`
+				Text struct {
+					Content string      `json:"content"`
+					Link    interface{} `json:"link"`
+				} `json:"text"`
+				Annotations struct {
+					Bold          bool   `json:"bold"`
+					Italic        bool   `json:"italic"`
+					Strikethrough bool   `json:"strikethrough"`
+					Underline     bool   `json:"underline"`
+					Code          bool   `json:"code"`
+					Color         string `json:"color"`
+				} `json:"annotations"`
+				PlainText string      `json:"plain_text"`
+				Href      interface{} `json:"href"`
+			} `json:"title"`
+		} `json:"Name"`
+	}
 }

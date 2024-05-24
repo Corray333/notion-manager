@@ -1,0 +1,196 @@
+package notion
+
+import (
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/Corray333/notion-manager/internal/project"
+)
+
+var (
+	ErrTimeNoTitle = errors.New("time created, but title is empty")
+)
+
+type Time struct {
+	ID          string `json:"id"`
+	CreatedTime string `json:"created_time"`
+	Properties  struct {
+		TotalHours struct {
+			ID     string  `json:"id"`
+			Type   string  `json:"type"`
+			Number float64 `json:"number"`
+		} `json:"Всего ч"`
+		Task struct {
+			ID       string `json:"id"`
+			Type     string `json:"type"`
+			Relation []struct {
+				ID string `json:"id"`
+			} `json:"relation"`
+		} `json:"Задача"`
+		WorkDate struct {
+			ID   string `json:"id"`
+			Type string `json:"type"`
+			Date struct {
+				Start    string      `json:"start"`
+				End      interface{} `json:"end"`
+				TimeZone interface{} `json:"time_zone"`
+			} `json:"date"`
+		} `json:"Дата работ"`
+		WhatDid struct {
+			ID    string `json:"id"`
+			Type  string `json:"type"`
+			Title []struct {
+				Type string `json:"type"`
+				Text struct {
+					Content string      `json:"content"`
+					Link    interface{} `json:"link"`
+				} `json:"text"`
+				Annotations struct {
+					Bold          bool   `json:"bold"`
+					Italic        bool   `json:"italic"`
+					Strikethrough bool   `json:"strikethrough"`
+					Underline     bool   `json:"underline"`
+					Code          bool   `json:"code"`
+					Color         string `json:"color"`
+				} `json:"annotations"`
+				PlainText string      `json:"plain_text"`
+				Href      interface{} `json:"href"`
+			} `json:"title"`
+		} `json:"Что делали"`
+	}
+}
+
+func GetTimes(store Storage, project project.Project, cursor string) ([]Time, error) {
+	projectID, err := store.GetInternalID(project.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+
+	req := map[string]interface{}{
+		"filter": map[string]interface{}{
+			"and": []map[string]interface{}{
+				{
+					"timestamp": "created_time",
+					"created_time": map[string]interface{}{
+						"after": time.Unix(project.TimeLastSynced, 0).Format(TIME_LAYOUT),
+					},
+				},
+				{
+					"property": "Проект",
+					"rollup": map[string]interface{}{
+						"any": map[string]interface{}{
+							"relation": map[string]interface{}{
+								"contains": projectID,
+							},
+						},
+					},
+				},
+			},
+		},
+		"sorts": []map[string]interface{}{
+			{
+				"timestamp": "created_time",
+				"direction": "ascending",
+			},
+		},
+	}
+
+	if cursor != "" {
+		fmt.Println("Next cursor applied")
+		req["start_cursor"] = cursor
+	}
+
+	resp, err := SearchPages(os.Getenv("TIME_DB"), req)
+	if err != nil {
+		return nil, err
+	}
+	times := struct {
+		Results    []Time `json:"results"`
+		HasMore    bool   `json:"has_more"`
+		NextCursor string `json:"next_cursor"`
+	}{}
+
+	err = json.Unmarshal(resp, &times)
+	if err != nil {
+		return nil, err
+	}
+
+	if times.HasMore {
+		moreTimes, err := GetTimes(store, project, times.NextCursor)
+		if err != nil {
+			return nil, err
+		}
+		return append(times.Results, moreTimes...), nil
+	}
+
+	return times.Results, nil
+}
+
+func (t *Time) ConstructRequest(store Storage) (map[string]interface{}, error) {
+	if len(t.Properties.Task.Relation) == 0 {
+		return nil, errors.New("time has no task, time_id = " + t.ID)
+	}
+	task, err := store.GetClientID(t.Properties.Task.Relation[0].ID)
+	if err != nil {
+		return nil, fmt.Errorf("task %s is not copied yet: %w", t.Properties.Task.Relation[0].ID, err)
+	}
+
+	req := map[string]interface{}{
+		"Всего ч": map[string]interface{}{
+			"number": t.Properties.TotalHours.Number,
+		},
+		"Задача": map[string]interface{}{
+			"relation": []map[string]interface{}{
+				{
+					"id": task,
+				},
+			},
+		},
+	}
+	if len(t.Properties.WhatDid.Title) != 0 {
+		req["Name"] = map[string]interface{}{
+			"type": "title",
+			"title": []map[string]interface{}{
+				{
+					"type": "text",
+					"text": map[string]interface{}{
+						"content": t.Properties.WhatDid.Title[0].PlainText,
+					},
+				},
+			},
+		}
+		return req, nil
+	} else {
+		return req, ErrTimeNoTitle
+	}
+}
+
+func (t *Time) Upload(store Storage, project project.Project) error {
+
+	if _, err := store.GetClientID(t.ID); err != sql.ErrNoRows {
+		return err
+	}
+
+	req, construct_err := t.ConstructRequest(store)
+	if construct_err != ErrTimeNoTitle && construct_err != nil {
+		return construct_err
+	}
+
+	if _, err := CreatePage(project.TimeDBID, req, ""); err != nil {
+		return err
+	}
+
+	created_at, err := time.Parse(TIME_LAYOUT_IN, t.CreatedTime)
+	if err != nil {
+		return fmt.Errorf("time %s has wrong created time format: %w", t.ID, err)
+	}
+	if project.TasksLastSynced < created_at.Unix() {
+		project.TasksLastSynced = created_at.Unix()
+	}
+
+	return construct_err
+}
