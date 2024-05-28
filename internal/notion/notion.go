@@ -48,6 +48,16 @@ type Storage interface {
 	GetClientID(internalID string) (string, error)
 	GetInternalID(clientID string) (string, error)
 	SetClientID(internalID, clientID string) error
+	SaveRowsToBeUpdated(Validation)
+	GetRowsToBeUpdated() ([]Validation, error)
+}
+
+type Validation struct {
+	Title      string `json:"title" db:"title"`
+	Type       string `json:"type" db:"type"`
+	InternalID string `json:"internal_id" db:"internal_id"`
+	ClientID   string `json:"client_id" db:"client_id"`
+	Errors     string `json:"errors" db:"errors"`
 }
 
 func StartSync(store Storage) []Error {
@@ -71,7 +81,6 @@ func StartSync(store Storage) []Error {
 		for _, task := range tasks {
 			err := task.Upload(store, &project)
 			if err != nil {
-				fmt.Println(err.Error())
 				errs = append(errs, Error{
 					err:        err,
 					table_type: TaskTable,
@@ -91,7 +100,7 @@ func StartSync(store Storage) []Error {
 		}
 		fmt.Printf("Loaded %d times.", len(times))
 		for _, time := range times {
-			if err := time.Upload(store, project); err != nil {
+			if err := time.Upload(store, &project); err != nil {
 				fmt.Println(err.Error())
 				errs = append(errs, Error{
 					err:        err,
@@ -161,14 +170,13 @@ func GetPage(pageid string) ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("notion error: %s", resp.Status)
-	}
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("notion error while getting page: %s", string(body))
 	}
 
 	return body, nil

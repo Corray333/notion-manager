@@ -12,7 +12,9 @@ import (
 )
 
 var (
-	ErrTimeNoTitle = errors.New("time created, but title is empty")
+	ErrTimeNoTitle      = "time created, but title is empty"
+	ErrTimeNoTask       = "time created, but task is empty"
+	ErrTimeNoTotalHours = "time created, but total hours is empty"
 )
 
 type Time struct {
@@ -61,6 +63,34 @@ type Time struct {
 				Href      interface{} `json:"href"`
 			} `json:"title"`
 		} `json:"Что делали"`
+	}
+}
+
+func (t *Time) Validate(store Storage, client_id string) {
+	errs := ""
+	title := ""
+	if len(t.Properties.WhatDid.Title) == 0 {
+		errs += ErrTimeNoTitle + ", "
+	} else {
+		for _, t := range t.Properties.WhatDid.Title {
+			title += t.PlainText
+		}
+	}
+	if len(t.Properties.Task.Relation) == 0 {
+		errs += ErrTimeNoTask + ", "
+	}
+	if t.Properties.TotalHours.Number == 0 {
+		errs += ErrTimeNoTotalHours + ", "
+	}
+	if len(errs) > 0 {
+		fmt.Println("Validation failed: ", t.ID, " --- ", client_id, " --- ", errs)
+		store.SaveRowsToBeUpdated(Validation{
+			Type:       "time",
+			InternalID: t.ID,
+			ClientID:   client_id,
+			Title:      title,
+			Errors:     errs,
+		})
 	}
 }
 
@@ -151,46 +181,65 @@ func (t *Time) ConstructRequest(store Storage) (map[string]interface{}, error) {
 			},
 		},
 	}
-	if len(t.Properties.WhatDid.Title) != 0 {
+	title := ""
+
+	for _, t := range t.Properties.WhatDid.Title {
+		title += t.PlainText
+	}
+
+	if len(t.Properties.WhatDid.Title) > 0 {
 		req["Name"] = map[string]interface{}{
 			"type": "title",
 			"title": []map[string]interface{}{
 				{
 					"type": "text",
 					"text": map[string]interface{}{
-						"content": t.Properties.WhatDid.Title[0].PlainText,
+						"content": title,
 					},
 				},
 			},
 		}
 		return req, nil
 	} else {
-		return req, ErrTimeNoTitle
+		return req, errors.New(ErrTimeNoTitle)
 	}
 }
 
-func (t *Time) Upload(store Storage, project project.Project) error {
+func (t *Time) Upload(store Storage, project *project.Project) error {
 
 	if _, err := store.GetClientID(t.ID); err != sql.ErrNoRows {
 		return err
 	}
 
 	req, construct_err := t.ConstructRequest(store)
-	if construct_err != ErrTimeNoTitle && construct_err != nil {
+	if construct_err != nil && construct_err.Error() != ErrTimeNoTitle {
 		return construct_err
 	}
 
-	if _, err := CreatePage(project.TimeDBID, req, ""); err != nil {
+	body, err := CreatePage(project.TimeDBID, req, "")
+	if err != nil {
 		return err
 	}
 
+	resp := struct {
+		ID string `json:"id"`
+	}{}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return err
+	}
+
+	if err := store.SetClientID(t.ID, resp.ID); err != nil {
+		return fmt.Errorf("failed to save task in db: %w", err)
+	}
 	created_at, err := time.Parse(TIME_LAYOUT_IN, t.CreatedTime)
 	if err != nil {
 		return fmt.Errorf("time %s has wrong created time format: %w", t.ID, err)
 	}
-	if project.TasksLastSynced < created_at.Unix() {
-		project.TasksLastSynced = created_at.Unix()
+	if project.TimeLastSynced < created_at.Unix() {
+		project.TimeLastSynced = created_at.Unix()
 	}
+
+	t.Validate(store, resp.ID)
 
 	return construct_err
 }

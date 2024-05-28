@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"fmt"
+
 	"github.com/Corray333/notion-manager/internal/notion"
 	"github.com/Corray333/notion-manager/internal/project"
 	"github.com/Masterminds/squirrel"
@@ -15,8 +17,8 @@ func NewStorage() *Storage {
 	return &Storage{DB: MustInit()}
 }
 
-func (s *Storage) NewProject(name string, timeDBID string, tasksDBID string) error {
-	_, err := s.DB.Exec("INSERT INTO projects (name, time_db_id, tasks_db_id) VALUES (?, ?, ?)", name, timeDBID, tasksDBID)
+func (s *Storage) NewProject(name string, timeDBID string, tasksDBID string, tasks_ls int, time_ls int) error {
+	_, err := s.DB.Exec("INSERT INTO projects (name, time_db_id, tasks_db_id, tasks_last_synced, time_last_synced) VALUES (?, ?, ?)", name, timeDBID, tasksDBID, tasks_ls, time_ls)
 	return err
 }
 
@@ -59,4 +61,33 @@ func (s *Storage) SaveErrors(errs []notion.Error) error {
 	}
 	_, err = s.DB.Exec(sql, args...)
 	return err
+}
+
+func (s *Storage) SaveRowsToBeUpdated(val notion.Validation) {
+	query := squirrel.Insert("to_be_updated").Columns("title", "type", "internal_id", "client_id", "errors").Values(val.Title, val.Type, val.InternalID, val.ClientID, val.Errors)
+	sql, args, err := query.ToSql()
+	if err != nil {
+		return
+	}
+	// TODO: decide, what to do with that
+	if _, err := s.DB.Exec(sql, args...); err != nil {
+		fmt.Println("Failed to set task to be updated: ", err)
+	}
+}
+
+func (s *Storage) GetRowsToBeUpdated() ([]notion.Validation, error) {
+	var pages []notion.Validation
+	var page notion.Validation
+	rows, err := s.DB.Queryx("SELECT * FROM to_be_updated")
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		err := rows.StructScan(&page)
+		if err != nil {
+			return nil, err
+		}
+		pages = append(pages, page)
+	}
+	return pages, nil
 }

@@ -25,6 +25,7 @@ func (a *App) Run() {
 
 	router.Post("/projects", handlers.NewProject(store))
 	router.Patch("/sync", handlers.UpdateDatabases(store))
+	router.Get("/need-fix", handlers.GetToBeUpdated(store))
 
 	slog.Info("Starting server on port " + viper.GetString("PORT"))
 	if err := http.ListenAndServe(viper.GetString("PORT"), router); err != nil {

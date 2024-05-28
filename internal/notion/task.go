@@ -10,6 +10,13 @@ import (
 	"github.com/Corray333/notion-manager/internal/project"
 )
 
+var (
+	ErrTaskNoTitle    = "task title is empty"
+	ErrTaskNoWorker   = "task worker is empty"
+	ErrTaskNoProduct  = "task product is empty"
+	ErrTaskNoDeadline = "task deadline is empty"
+)
+
 type Task struct {
 	ID          string `json:"id"`
 	CreatedTime string `json:"created_time"`
@@ -66,6 +73,36 @@ type Task struct {
 			} `json:"title"`
 		} `json:"Task"`
 	} `json:"properties"`
+}
+
+func (t *Task) Validate(store Storage, client_id string) {
+	errs := ""
+	title := ""
+	if t.Properties.Task.Title == nil || len(t.Properties.Task.Title) == 0 {
+		errs += ErrTaskNoTitle + ", "
+	} else {
+		title = t.Properties.Task.Title[0].PlainText
+	}
+	if t.Properties.Product.Relation == nil || len(t.Properties.Product.Relation) == 0 {
+		errs += ErrTaskNoProduct + ", "
+	}
+	if t.Properties.Worker.People == nil || len(t.Properties.Worker.People) == 0 {
+		errs += ErrTaskNoWorker + ", "
+	}
+	if t.Properties.Deadline.Date.Start == "" {
+		errs += ErrTaskNoDeadline + ", "
+	}
+
+	if len(errs) > 0 {
+		fmt.Println("Validation failed: ", t.ID, " --- ", client_id, " --- ", errs)
+		store.SaveRowsToBeUpdated(Validation{
+			ClientID:   client_id,
+			InternalID: t.ID,
+			Title:      title,
+			Errors:     errs,
+			Type:       "task",
+		})
+	}
 }
 
 type GetTasksResponse struct {
@@ -176,6 +213,10 @@ func (t *Task) ConstructRequest(store Storage, project *project.Project) (map[st
 	}
 
 	// TODO: add request constructorПип
+	title := ""
+	for _, t := range t.Properties.Task.Title {
+		title += t.PlainText
+	}
 
 	req := map[string]interface{}{
 		"Name": map[string]interface{}{
@@ -184,7 +225,7 @@ func (t *Task) ConstructRequest(store Storage, project *project.Project) (map[st
 				{
 					"type": "text",
 					"text": map[string]interface{}{
-						"content": t.Properties.Task.Title[0].PlainText,
+						"content": title,
 					},
 				},
 			},
@@ -286,6 +327,8 @@ func (t *Task) Upload(store Storage, project *project.Project) error {
 	if project.TasksLastSynced < created_at.Unix() {
 		project.TasksLastSynced = created_at.Unix()
 	}
+
+	t.Validate(store, response.ID)
 
 	return err
 }
