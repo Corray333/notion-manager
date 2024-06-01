@@ -26,14 +26,14 @@ type Storage interface {
 }
 
 type NewProjectRequest struct {
-	Name              string `json:"name"`
-	ProjectClientId   string `json:"project_client_id"`
-	ProjectInternalID string `json:"project_internal_id"`
-	TimeDBID          string `json:"time_db_id"`
-	TasksDBID         string `json:"tasks_db_id"`
-	TimeLastSynced    int    `json:"time_last_synced"`
-	TasksLastSynced   int    `json:"tasks_last_synced"`
-	WorkerDBID        string `json:"worker_db_id"`
+	Name              string `json:"name"`                // Project name
+	ProjectClientId   string `json:"project_client_id"`   // ID of project in internal dashboard
+	ProjectInternalID string `json:"project_internal_id"` // ID of project in client dashboard
+	TimeDBID          string `json:"time_db_id"`          // ID of time database in client dashboard
+	TasksDBID         string `json:"tasks_db_id"`         // ID of tasks database in client dashboard
+	TimeLastSynced    int    `json:"time_last_synced"`    // Time to start searching for updates in time database
+	TasksLastSynced   int    `json:"tasks_last_synced"`   // Time to start searching for updates in tasks database
+	WorkerDBID        string `json:"worker_db_id"`        // ID of worker database in client dashboard
 }
 
 // NewProject creates a new project

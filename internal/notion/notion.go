@@ -57,12 +57,12 @@ type Storage interface {
 }
 
 type Validation struct {
-	Title      string `json:"title" db:"title"`
-	Type       string `json:"type" db:"type"`
-	InternalID string `json:"internal_id" db:"internal_id"`
-	ClientID   string `json:"client_id" db:"client_id"`
-	Errors     string `json:"errors" db:"errors"`
-	ProjectID  string `json:"project_id" db:"project_id"`
+	Title      string `json:"title" db:"title"`             // Title of page in database
+	Type       string `json:"type" db:"type"`               // Type of database
+	InternalID string `json:"internal_id" db:"internal_id"` // ID of page in internal dashboard
+	ClientID   string `json:"client_id" db:"client_id"`     // ID of page in client dashboard
+	Errors     string `json:"errors" db:"errors"`           // Errors encountered while validating
+	ProjectID  string `json:"project_id" db:"project_id"`   // ID of project
 }
 
 func StartSync(store Storage) []Error {

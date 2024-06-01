@@ -119,27 +119,35 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "name": {
+                    "description": "Project name",
                     "type": "string"
                 },
                 "project_client_id": {
+                    "description": "ID of project in internal dashboard",
                     "type": "string"
                 },
                 "project_internal_id": {
+                    "description": "ID of project in client dashboard",
                     "type": "string"
                 },
                 "tasks_db_id": {
+                    "description": "ID of tasks database in client dashboard",
                     "type": "string"
                 },
                 "tasks_last_synced": {
+                    "description": "Time to start searching for updates in tasks database",
                     "type": "integer"
                 },
                 "time_db_id": {
+                    "description": "ID of time database in client dashboard",
                     "type": "string"
                 },
                 "time_last_synced": {
+                    "description": "Time to start searching for updates in time database",
                     "type": "integer"
                 },
                 "worker_db_id": {
+                    "description": "ID of worker database in client dashboard",
                     "type": "string"
                 }
             }
@@ -148,21 +156,27 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "client_id": {
+                    "description": "ID of page in client dashboard",
                     "type": "string"
                 },
                 "errors": {
+                    "description": "Errors encountered while validating",
                     "type": "string"
                 },
                 "internal_id": {
+                    "description": "ID of page in internal dashboard",
                     "type": "string"
                 },
                 "project_id": {
+                    "description": "ID of project",
                     "type": "string"
                 },
                 "title": {
+                    "description": "Title of page in database",
                     "type": "string"
                 },
                 "type": {
+                    "description": "Type of database",
                     "type": "string"
                 }
             }
