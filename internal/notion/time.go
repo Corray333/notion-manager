@@ -66,7 +66,7 @@ type Time struct {
 	}
 }
 
-func (t *Time) Validate(store Storage, client_id string) {
+func (t *Time) Validate(store Storage, client_id string, project_id string) {
 	errs := ""
 	title := ""
 	if len(t.Properties.WhatDid.Title) == 0 {
@@ -83,14 +83,17 @@ func (t *Time) Validate(store Storage, client_id string) {
 		errs += ErrTimeNoTotalHours + ", "
 	}
 	if len(errs) > 0 {
-		fmt.Println("Validation failed: ", t.ID, " --- ", client_id, " --- ", errs)
+		errs = errs[:len(errs)-2]
 		store.SaveRowsToBeUpdated(Validation{
 			Type:       "time",
 			InternalID: t.ID,
 			ClientID:   client_id,
 			Title:      title,
 			Errors:     errs,
+			ProjectID:  project_id,
 		})
+	} else {
+		store.RemoveRowToBeUpdated(t.ID)
 	}
 }
 
@@ -104,8 +107,8 @@ func GetTimes(store Storage, project project.Project, cursor string) ([]Time, er
 		"filter": map[string]interface{}{
 			"and": []map[string]interface{}{
 				{
-					"timestamp": "created_time",
-					"created_time": map[string]interface{}{
+					"timestamp": "last_edited_time",
+					"last_edited_time": map[string]interface{}{
 						"after": time.Unix(project.TimeLastSynced, 0).Format(TIME_LAYOUT),
 					},
 				},
@@ -160,6 +163,21 @@ func GetTimes(store Storage, project project.Project, cursor string) ([]Time, er
 	return times.Results, nil
 }
 
+func GetTime(id string) (Time, error) {
+	resp, err := GetPage(id)
+	if err != nil {
+		return Time{}, err
+	}
+
+	time := Time{}
+	err = json.Unmarshal(resp, &time)
+	if err != nil {
+		return Time{}, err
+	}
+
+	return time, nil
+}
+
 func (t *Time) ConstructRequest(store Storage) (map[string]interface{}, error) {
 	if len(t.Properties.Task.Relation) == 0 {
 		return nil, errors.New("time has no task, time_id = " + t.ID)
@@ -207,8 +225,10 @@ func (t *Time) ConstructRequest(store Storage) (map[string]interface{}, error) {
 
 func (t *Time) Upload(store Storage, project *project.Project) error {
 
-	if _, err := store.GetClientID(t.ID); err != sql.ErrNoRows {
+	if _, err := store.GetClientID(t.ID); err != nil && err != sql.ErrNoRows {
 		return err
+	} else if err == nil {
+		return t.Update(store, project)
 	}
 
 	req, construct_err := t.ConstructRequest(store)
@@ -237,9 +257,38 @@ func (t *Time) Upload(store Storage, project *project.Project) error {
 	}
 	if project.TimeLastSynced < created_at.Unix() {
 		project.TimeLastSynced = created_at.Unix()
+		store.SetLastSynced(project)
 	}
 
-	t.Validate(store, resp.ID)
+	t.Validate(store, resp.ID, project.ProjectID)
 
 	return construct_err
+}
+
+func (t *Time) Update(store Storage, project *project.Project) error {
+	clientID, err := store.GetClientID(t.ID)
+	if err != nil {
+		return err
+	}
+	req, err := t.ConstructRequest(store)
+	if err != nil {
+		return err
+	}
+
+	if _, err := UpdatePage(clientID, req); err != nil {
+		return err
+	}
+
+	created_at, err := time.Parse(TIME_LAYOUT_IN, t.CreatedTime)
+	if err != nil {
+		return fmt.Errorf("time %s has wrong created time format: %w", t.ID, err)
+	}
+	if project.TimeLastSynced < created_at.Unix() {
+		project.TimeLastSynced = created_at.Unix()
+		store.SetLastSynced(project)
+	}
+
+	t.Validate(store, clientID, project.ProjectID)
+
+	return nil
 }

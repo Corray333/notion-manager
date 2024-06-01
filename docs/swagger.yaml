@@ -1,4 +1,103 @@
+definitions:
+  handlers.NewProjectRequest:
+    properties:
+      name:
+        type: string
+      project_client_id:
+        type: string
+      project_internal_id:
+        type: string
+      tasks_db_id:
+        type: string
+      tasks_last_synced:
+        type: integer
+      time_db_id:
+        type: string
+      time_last_synced:
+        type: integer
+      worker_db_id:
+        type: string
+    type: object
+  notion.Validation:
+    properties:
+      client_id:
+        type: string
+      errors:
+        type: string
+      internal_id:
+        type: string
+      project_id:
+        type: string
+      title:
+        type: string
+      type:
+        type: string
+    type: object
 info:
   contact: {}
-paths: {}
+paths:
+  /fix:
+    get:
+      description: Retrieve the rows that need to be updated
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/notion.Validation'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get rows to be updated
+      tags:
+      - updates
+  /projects:
+    post:
+      consumes:
+      - application/json
+      description: Create a new project with the given details
+      parameters:
+      - description: New Project
+        in: body
+        name: project
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.NewProjectRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Create a new project
+      tags:
+      - projects
+  /sync:
+    patch:
+      description: Start the process of updating the databases
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Update databases
+      tags:
+      - databases
 swagger: "2.0"

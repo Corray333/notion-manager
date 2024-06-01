@@ -14,7 +14,160 @@ const docTemplate = `{
     },
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
-    "paths": {}
+    "paths": {
+        "/fix": {
+            "get": {
+                "description": "Retrieve the rows that need to be updated",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "updates"
+                ],
+                "summary": "Get rows to be updated",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/notion.Validation"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects": {
+            "post": {
+                "description": "Create a new project with the given details",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "summary": "Create a new project",
+                "parameters": [
+                    {
+                        "description": "New Project",
+                        "name": "project",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.NewProjectRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/sync": {
+            "patch": {
+                "description": "Start the process of updating the databases",
+                "tags": [
+                    "databases"
+                ],
+                "summary": "Update databases",
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "handlers.NewProjectRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "project_client_id": {
+                    "type": "string"
+                },
+                "project_internal_id": {
+                    "type": "string"
+                },
+                "tasks_db_id": {
+                    "type": "string"
+                },
+                "tasks_last_synced": {
+                    "type": "integer"
+                },
+                "time_db_id": {
+                    "type": "string"
+                },
+                "time_last_synced": {
+                    "type": "integer"
+                },
+                "worker_db_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "notion.Validation": {
+            "type": "object",
+            "properties": {
+                "client_id": {
+                    "type": "string"
+                },
+                "errors": {
+                    "type": "string"
+                },
+                "internal_id": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        }
+    }
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it

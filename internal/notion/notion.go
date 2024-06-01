@@ -17,6 +17,8 @@ const TIME_LAYOUT_IN = "2006-01-02T15:04:05.999Z07:00"
 
 type TableType string
 
+var IsSyncing = false
+
 const (
 	TimeTable    TableType = "time"
 	TaskTable    TableType = "task"
@@ -44,12 +46,14 @@ func (err Error) Unpack() (string, string, string, string) {
 // Task
 type Storage interface {
 	GetProjects() ([]project.Project, error)
-	SetLastSynced(project project.Project) error
+	SetLastSynced(project *project.Project) error
 	GetClientID(internalID string) (string, error)
 	GetInternalID(clientID string) (string, error)
 	SetClientID(internalID, clientID string) error
 	SaveRowsToBeUpdated(Validation)
 	GetRowsToBeUpdated() ([]Validation, error)
+	GetRowsToBeUpdatedByProject(projectID string) ([]Validation, error)
+	RemoveRowToBeUpdated(internalID string) error
 }
 
 type Validation struct {
@@ -58,9 +62,18 @@ type Validation struct {
 	InternalID string `json:"internal_id" db:"internal_id"`
 	ClientID   string `json:"client_id" db:"client_id"`
 	Errors     string `json:"errors" db:"errors"`
+	ProjectID  string `json:"project_id" db:"project_id"`
 }
 
 func StartSync(store Storage) []Error {
+	if IsSyncing {
+		return []Error{}
+	} else {
+		IsSyncing = true
+		defer func() {
+			IsSyncing = false
+		}()
+	}
 	projects, err := store.GetProjects()
 	if err != nil {
 		panic(err)
@@ -111,7 +124,7 @@ func StartSync(store Storage) []Error {
 			}
 		}
 
-		if err := store.SetLastSynced(project); err != nil {
+		if err := store.SetLastSynced(&project); err != nil {
 			errs = append(errs, Error{
 				err:        err,
 				table_type: ProjectTable,
@@ -232,6 +245,83 @@ func CreatePage(dbid string, properties interface{}, icon string) ([]byte, error
 	}
 
 	return body, nil
+}
+
+func UpdatePage(pageid string, properties interface{}) ([]byte, error) {
+	url := "https://api.notion.com/v1/pages/" + pageid
+
+	reqBody := map[string]interface{}{
+		"properties": properties,
+	}
+
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", url, bytes.NewBuffer(data))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+os.Getenv("NOTION_SECRET"))
+	req.Header.Set("Notion-Version", "2022-06-28")
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("notion error %s while updating page with properties %s", string(body), string(data))
+	}
+
+	return body, nil
+
+}
+
+func FixBroken(store Storage) error {
+	projects, err := store.GetProjects()
+	if err != nil {
+		panic(err)
+	}
+
+	for _, project := range projects {
+		pages, err := store.GetRowsToBeUpdatedByProject(project.ProjectID)
+		if err != nil {
+			return err
+		}
+		for _, page := range pages {
+			if page.Type == "task" {
+				task, err := GetTask(page.InternalID)
+				if err != nil {
+					return err
+				}
+				if err := task.Update(store, &project); err != nil {
+					return err
+				}
+			} else if page.Type == "time" {
+				time, err := GetTime(page.InternalID)
+				if err != nil {
+					return err
+				}
+				if err := time.Update(store, &project); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+
 }
 
 func getWorker(dbid, workerId string) (*Worker, error) {

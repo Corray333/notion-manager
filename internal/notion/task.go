@@ -75,7 +75,7 @@ type Task struct {
 	} `json:"properties"`
 }
 
-func (t *Task) Validate(store Storage, client_id string) {
+func (t *Task) Validate(store Storage, client_id string, project_id string) {
 	errs := ""
 	title := ""
 	if t.Properties.Task.Title == nil || len(t.Properties.Task.Title) == 0 {
@@ -92,16 +92,22 @@ func (t *Task) Validate(store Storage, client_id string) {
 	if t.Properties.Deadline.Date.Start == "" {
 		errs += ErrTaskNoDeadline + ", "
 	}
+	if t.Properties.Priority.Select.Name == "" {
+		errs += "task priority is empty, "
+	}
 
 	if len(errs) > 0 {
-		fmt.Println("Validation failed: ", t.ID, " --- ", client_id, " --- ", errs)
+		errs = errs[:len(errs)-2]
 		store.SaveRowsToBeUpdated(Validation{
 			ClientID:   client_id,
 			InternalID: t.ID,
 			Title:      title,
 			Errors:     errs,
 			Type:       "task",
+			ProjectID:  project_id,
 		})
+	} else {
+		store.RemoveRowToBeUpdated(t.ID)
 	}
 }
 
@@ -120,8 +126,8 @@ func GetTasks(store Storage, project project.Project, cursor string) ([]Task, er
 		"filter": map[string]interface{}{
 			"and": []map[string]interface{}{
 				{
-					"timestamp": "created_time",
-					"created_time": map[string]interface{}{
+					"timestamp": "last_edited_time",
+					"last_edited_time": map[string]interface{}{
 						"after": time.Unix(project.TasksLastSynced, 0).Format(TIME_LAYOUT),
 					},
 				},
@@ -167,6 +173,21 @@ func GetTasks(store Storage, project project.Project, cursor string) ([]Task, er
 
 	return tasks.Results, nil
 
+}
+
+func GetTask(id string) (*Task, error) {
+	resp, err := GetPage(id)
+	if err != nil {
+		return nil, err
+	}
+
+	var task Task
+	err = json.Unmarshal(resp, &task)
+	if err != nil {
+		return nil, err
+	}
+
+	return &task, nil
 }
 
 func (t *Task) ConstructRequest(store Storage, project *project.Project) (map[string]interface{}, error) {
@@ -289,8 +310,10 @@ func (t *Task) ConstructRequest(store Storage, project *project.Project) (map[st
 }
 
 func (t *Task) Upload(store Storage, project *project.Project) error {
-	if _, err := store.GetClientID(t.ID); err != sql.ErrNoRows {
-		return nil
+	if _, err := store.GetClientID(t.ID); err != nil && err != sql.ErrNoRows {
+		return err
+	} else if err == nil {
+		return t.Update(store, project)
 	}
 
 	req, err := t.ConstructRequest(store, project)
@@ -326,9 +349,37 @@ func (t *Task) Upload(store Storage, project *project.Project) error {
 	created_at, _ := time.Parse(TIME_LAYOUT_IN, t.CreatedTime)
 	if project.TasksLastSynced < created_at.Unix() {
 		project.TasksLastSynced = created_at.Unix()
+		store.SetLastSynced(project)
 	}
 
-	t.Validate(store, response.ID)
+	t.Validate(store, response.ID, project.ProjectID)
 
 	return err
+}
+
+func (t *Task) Update(store Storage, project *project.Project) error {
+	clientID, err := store.GetClientID(t.ID)
+	if err != nil {
+		return err
+	}
+
+	req, err := t.ConstructRequest(store, project)
+	if err != nil {
+		return err
+	}
+
+	_, err = UpdatePage(clientID, req)
+	if err != nil {
+		return err
+	}
+
+	created_at, _ := time.Parse(TIME_LAYOUT_IN, t.CreatedTime)
+	if project.TasksLastSynced < created_at.Unix() {
+		project.TasksLastSynced = created_at.Unix()
+		store.SetLastSynced(project)
+	}
+
+	t.Validate(store, clientID, project.ProjectID)
+
+	return nil
 }
