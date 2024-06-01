@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  api:
+    build: 
+      context: ./
+      dockerfile: Dockerfile
+    volumes:
+      - ./:/app
+    ports:
+      - 3000:3000
+    command: make run
+  
+  nginx:
+    image: nginx:latest
+    ports:
+      - 80:80
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - api
+  
