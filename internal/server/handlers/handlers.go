@@ -12,13 +12,13 @@ import (
 )
 
 type Storage interface {
-	NewProject(name string, client_id string, internal_id string, worker_db_id string, timeDBID string, tasksDBID string, tasks_ls int, time_ls int) error
+	NewProject(proj *project.Project) error
 	GetProjects() ([]project.Project, error)
 	SetLastSynced(project *project.Project) error
 	GetClientID(internalID string) (string, error)
 	GetInternalID(clientID string) (string, error)
 	SetClientID(internalID, clientID string) error
-	SaveErrors(errs []notion.Error) error
+	SaveError(err notion.Error) error
 	SaveRowsToBeUpdated(notion.Validation)
 	GetRowsToBeUpdated() ([]notion.Validation, error)
 	GetRowsToBeUpdatedByProject(projectID string) ([]notion.Validation, error)
@@ -36,33 +36,41 @@ type NewProjectRequest struct {
 	WorkerDBID        string `json:"worker_db_id"`        // ID of worker database in client dashboard
 }
 
-// NewProject creates a new project
-// @Summary Create a new project
-// @Description Create a new project with the given details
-// @Tags projects
-// @Accept  json
-// @Produce  json
-// @Param   project body NewProjectRequest true "New Project"
-// @Success 201 {string} string "Created"
-// @Failure 400 {string} string "Bad Request"
-// @Failure 500 {string} string "Internal Server Error"
-// @Router /projects [post]
-func NewProject(store Storage) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req NewProjectRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			slog.Error("error decoding request: " + err.Error())
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if err := store.NewProject(req.Name, req.ProjectClientId, req.ProjectInternalID, req.WorkerDBID, req.TimeDBID, req.TasksDBID, req.TasksLastSynced, req.TimeLastSynced); err != nil {
-			slog.Error("error creating project: " + err.Error())
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusCreated)
-	}
-}
+// // NewProject creates a new project
+// // @Summary Create a new project
+// // @Description Create a new project with the given details
+// // @Tags projects
+// // @Accept  json
+// // @Produce  json
+// // @Param   project body NewProjectRequest true "New Project"
+// // @Success 201 {string} string "Created"
+// // @Failure 400 {string} string "Bad Request"
+// // @Failure 500 {string} string "Internal Server Error"
+// // @Router /projects [post]
+// func NewProject(store Storage) http.HandlerFunc {
+// 	return func(w http.ResponseWriter, r *http.Request) {
+// 		var req NewProjectRequest
+// 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+// 			slog.Error("error decoding request: " + err.Error())
+// 			http.Error(w, err.Error(), http.StatusBadRequest)
+// 			return
+// 		}
+// 		proj := project.Project{
+// 			Name:        req.Name,
+// 			ProjectID:   req.ProjectClientId,
+// 			InternalID:  req.ProjectInternalID,
+// 			TimeDBID:    req.TimeDBID,
+// 			TasksDBID:   req.TasksDBID,
+// 			WorkersDBID: req.WorkerDBID,
+// 		}
+// 		if err := store.NewProject(proj); err != nil {
+// 			slog.Error("error creating project: " + err.Error())
+// 			http.Error(w, err.Error(), http.StatusInternalServerError)
+// 			return
+// 		}
+// 		w.WriteHeader(http.StatusCreated)
+// 	}
+// }
 
 // UpdateDatabases triggers the update of databases
 // @Summary Update databases
@@ -75,13 +83,7 @@ func UpdateDatabases(store Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// TODO: forbid multiple updates at the same time
 		go func() {
-			errs := notion.StartSync(store)
-			if len(errs) > 0 {
-				if err := store.SaveErrors(errs); err != nil {
-					slog.Error("error saving errors: " + err.Error())
-					return
-				}
-			}
+			notion.StartSync(store)
 		}()
 		w.WriteHeader(http.StatusAccepted)
 	}

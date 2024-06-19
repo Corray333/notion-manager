@@ -98,10 +98,7 @@ func (t *Time) Validate(store Storage, client_id string, project_id string) {
 }
 
 func GetTimes(store Storage, project project.Project, cursor string) ([]Time, error) {
-	projectID, err := store.GetInternalID(project.ProjectID)
-	if err != nil {
-		return nil, err
-	}
+	projectID := project.InternalID
 
 	req := map[string]interface{}{
 		"filter": map[string]interface{}{

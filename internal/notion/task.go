@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/Corray333/notion-manager/internal/project"
@@ -118,10 +119,8 @@ type GetTasksResponse struct {
 }
 
 func GetTasks(store Storage, project project.Project, cursor string) ([]Task, error) {
-	projectID, err := store.GetInternalID(project.ProjectID)
-	if err != nil {
-		return nil, err
-	}
+	projectID := project.InternalID
+
 	req := map[string]interface{}{
 		"filter": map[string]interface{}{
 			"and": []map[string]interface{}{
@@ -192,8 +191,8 @@ func GetTask(id string) (*Task, error) {
 
 func (t *Task) ConstructRequest(store Storage, project *project.Project) (map[string]interface{}, error) {
 	var worker *Worker
-	if len(t.Properties.Worker.People) != 0 {
-		// TODO: handle errors
+	if len(t.Properties.Worker.People) != 0 && slices.Contains(project.Schema, "Исполнитель") {
+		// TODO: create worker if not exists
 		worker, _ = getWorker(project.WorkersDBID, t.Properties.Worker.People[0].ID)
 	}
 
@@ -251,19 +250,22 @@ func (t *Task) ConstructRequest(store Storage, project *project.Project) (map[st
 				},
 			},
 		},
-		"Оценка": map[string]interface{}{
-			"number": t.Properties.Estimated.Number,
-		},
-		"Проект": map[string]interface{}{
+	}
+	if slices.Contains(project.Schema, "Проект") {
+		req["Проект"] = map[string]interface{}{
 			"relation": []map[string]interface{}{
 				{
 					"id": project.ProjectID,
 				},
 			},
-		},
+		}
 	}
-
-	if t.Properties.Status.Status.Name != "" {
+	if slices.Contains(project.Schema, "Оценка") {
+		req["Оценка"] = map[string]interface{}{
+			"number": t.Properties.Estimated.Number,
+		}
+	}
+	if slices.Contains(project.Schema, "Статус") && t.Properties.Status.Status.Name != "" {
 		req["Статус"] = map[string]interface{}{
 			"status": map[string]interface{}{
 				"name": t.Properties.Status.Status.Name,
@@ -271,7 +273,7 @@ func (t *Task) ConstructRequest(store Storage, project *project.Project) (map[st
 		}
 	}
 
-	if t.Properties.Priority.Select.Name != "" {
+	if slices.Contains(project.Schema, "Приоритет") && t.Properties.Priority.Select.Name != "" {
 		req["Приоритет"] = map[string]interface{}{
 			"select": map[string]interface{}{
 				"name": t.Properties.Priority.Select.Name,
@@ -279,24 +281,25 @@ func (t *Task) ConstructRequest(store Storage, project *project.Project) (map[st
 		}
 	}
 
-	if len(parentTask) > 0 && parentTask[0].ID != "" {
+	if slices.Contains(project.Schema, "Родительская задача") && len(parentTask) > 0 && parentTask[0].ID != "" {
 		req["Родительская задача"] = map[string]interface{}{
 			"relation": parentTask,
 		}
 	}
+	if slices.Contains(project.Schema, "Дедлайн") {
+		deadline := map[string]interface{}{
+			"date": map[string]interface{}{},
+		}
+		if t.Properties.Deadline.Date.End != nil {
+			deadline["date"].(map[string]interface{})["end"] = t.Properties.Deadline.Date.End
+		}
+		if t.Properties.Deadline.Date.Start != "" {
+			deadline["date"].(map[string]interface{})["start"] = t.Properties.Deadline.Date.Start
+			req["Дедлайн"] = deadline
+		}
+	}
 
-	deadline := map[string]interface{}{
-		"date": map[string]interface{}{},
-	}
-	if t.Properties.Deadline.Date.End != nil {
-		deadline["date"].(map[string]interface{})["end"] = t.Properties.Deadline.Date.End
-	}
-	if t.Properties.Deadline.Date.Start != "" {
-		deadline["date"].(map[string]interface{})["start"] = t.Properties.Deadline.Date.Start
-		req["Дедлайн"] = deadline
-	}
-
-	if worker != nil {
+	if slices.Contains(project.Schema, "Исполнитель") && worker != nil {
 		req["Исполнитель"] = map[string]interface{}{
 			"relation": []map[string]interface{}{
 				{
@@ -305,6 +308,7 @@ func (t *Task) ConstructRequest(store Storage, project *project.Project) (map[st
 			},
 		}
 	}
+
 	return req, nil
 
 }

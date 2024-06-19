@@ -1,4 +1,0 @@
-Error: invalid character 'e' looking for beginning of value, Table: task, Project: Экомобайл, ID: 77530281-c753-4fee-8c48-636b4655983a
-Error: invalid character 'e' looking for beginning of value, Table: task, Project: Экомобайл, ID: 6c49f7fd-49a9-473b-aee6-9bc6691b767e
-Error: Post "https://api.notion.com/v1/pages": read tcp 192.168.0.19:58768->188.114.99.224:443: read: connection reset by peer, Table: task, Project: Экомобайл, ID: ef25a17a-acce-468a-a560-c06f0e711bd9
-Error: Post "https://api.notion.com/v1/pages": read tcp 192.168.0.19:55712->188.114.98.224:443: read: connection reset by peer, Table: task, Project: Экомобайл, ID: 04541b4e-06ba-48cc-ad0a-4c3d2b42872d

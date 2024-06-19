@@ -17,12 +17,12 @@ func NewStorage() *Storage {
 	return &Storage{DB: MustInit()}
 }
 
-func (s *Storage) NewProject(name string, client_id string, internal_id string, worker_db_id string, timeDBID string, tasksDBID string, tasks_ls int, time_ls int) error {
-	_, err := s.DB.Exec("INSERT INTO projects (name, project_id, workers_db_id, time_db_id, tasks_db_id, tasks_last_synced, time_last_synced) VALUES (?, ?, ?, ?, ?, ?, ?)", name, client_id, worker_db_id, timeDBID, tasksDBID, tasks_ls, time_ls)
-	if err != nil {
-		return err
-	}
-	_, err = s.DB.Exec("INSERT INTO ids (internal_id, client_id) VALUES (?, ?)", internal_id, client_id)
+func (s *Storage) NewProject(proj *project.Project) error {
+
+	fmt.Println(proj)
+
+	_, err := s.DB.Exec("INSERT OR IGNORE INTO projects (name, project_id, internal_id, workers_db_id, time_db_id, tasks_db_id, tasks_last_synced, time_last_synced) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", proj.Name, proj.ProjectID, proj.InternalID, proj.WorkersDBID, proj.TimeDBID, proj.TasksDBID, 0, 0)
+
 	return err
 }
 
@@ -60,11 +60,8 @@ func (s *Storage) SetLastSynced(project *project.Project) error {
 	return err
 }
 
-func (s *Storage) SaveErrors(errs []notion.Error) error {
-	query := squirrel.Insert("errors").Columns("project_id", "type", "message", "page_id")
-	for _, err := range errs {
-		query = query.Values(err.Unpack())
-	}
+func (s *Storage) SaveError(errSave notion.Error) error {
+	query := squirrel.Insert("errors").Columns("project_id", "type", "message", "page_id").Values(errSave.Unpack())
 	sql, args, err := query.ToSql()
 	if err != nil {
 		return err

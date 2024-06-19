@@ -45,6 +45,7 @@ func (err Error) Unpack() (string, string, string, string) {
 
 // Task
 type Storage interface {
+	NewProject(proj *project.Project) error
 	GetProjects() ([]project.Project, error)
 	SetLastSynced(project *project.Project) error
 	GetClientID(internalID string) (string, error)
@@ -54,6 +55,7 @@ type Storage interface {
 	GetRowsToBeUpdated() ([]Validation, error)
 	GetRowsToBeUpdatedByProject(projectID string) ([]Validation, error)
 	RemoveRowToBeUpdated(internalID string) error
+	SaveError(errSave Error) error
 }
 
 type Validation struct {
@@ -65,26 +67,30 @@ type Validation struct {
 	ProjectID  string `json:"project_id" db:"project_id"`   // ID of project
 }
 
-func StartSync(store Storage) []Error {
+func StartSync(store Storage) {
 	if IsSyncing {
-		return []Error{}
+		return
 	} else {
 		IsSyncing = true
 		defer func() {
 			IsSyncing = false
 		}()
 	}
+
+	for _, proj := range LoadProjects() {
+		store.NewProject(proj)
+	}
+
 	projects, err := store.GetProjects()
 	if err != nil {
 		panic(err)
 	}
 
-	errs := []Error{}
-
 	for _, project := range projects {
+		project.Schema, _ = GetSchema(project.TasksDBID)
 		tasks, err := GetTasks(store, project, "")
 		if err != nil {
-			errs = append(errs, Error{
+			store.SaveError(Error{
 				err:        errors.Join(errors.New("error while getting tasks: "), err),
 				table_type: TaskTable,
 				project:    project,
@@ -94,45 +100,54 @@ func StartSync(store Storage) []Error {
 		for _, task := range tasks {
 			err := task.Upload(store, &project)
 			if err != nil {
-				errs = append(errs, Error{
+				fmt.Println(err)
+				store.SaveError(Error{
 					err:        err,
 					table_type: TaskTable,
 					project:    project,
 					id:         task.ID,
 				})
 			}
-		}
-
-		times, err := GetTimes(store, project, "")
-		if err != nil {
-			errs = append(errs, Error{
-				err:        errors.Join(errors.New("error while getting time rows: "), err),
-				table_type: TimeTable,
-				project:    project,
-			})
-		}
-		fmt.Printf("Loaded %d times.", len(times))
-		for _, time := range times {
-			if err := time.Upload(store, &project); err != nil {
-				fmt.Println(err.Error())
-				errs = append(errs, Error{
+			if err := store.SetLastSynced(&project); err != nil {
+				store.SaveError(Error{
 					err:        err,
-					table_type: TaskTable,
+					table_type: ProjectTable,
 					project:    project,
-					id:         time.ID,
 				})
 			}
 		}
 
-		if err := store.SetLastSynced(&project); err != nil {
-			errs = append(errs, Error{
-				err:        err,
-				table_type: ProjectTable,
-				project:    project,
-			})
+		if project.TimeDBID != "" {
+			project.Schema, _ = GetSchema(project.TimeDBID)
+			times, err := GetTimes(store, project, "")
+			if err != nil {
+				store.SaveError(Error{
+					err:        errors.Join(errors.New("error while getting time rows: "), err),
+					table_type: TimeTable,
+					project:    project,
+				})
+			}
+			fmt.Printf("Loaded %d times.", len(times))
+			for _, time := range times {
+				if err := time.Upload(store, &project); err != nil {
+					store.SaveError(Error{
+						err:        err,
+						table_type: TaskTable,
+						project:    project,
+						id:         time.ID,
+					})
+				}
+				if err := store.SetLastSynced(&project); err != nil {
+					store.SaveError(Error{
+						err:        err,
+						table_type: ProjectTable,
+						project:    project,
+					})
+				}
+			}
 		}
+
 	}
-	return errs
 }
 
 func SearchPages(dbid string, filter map[string]interface{}) ([]byte, error) {
@@ -415,4 +430,46 @@ type Worker struct {
 			} `json:"title"`
 		} `json:"Name"`
 	}
+}
+
+type Schema struct {
+	Properties map[string]interface{} `json:"properties"`
+}
+
+func GetSchema(dbid string) ([]string, error) {
+	url := "https://api.notion.com/v1/databases/" + dbid
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+os.Getenv("NOTION_SECRET"))
+	req.Header.Set("Notion-Version", "2022-06-28")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("notion error while getting page: %s", string(body))
+	}
+
+	schema := Schema{}
+	if err := json.Unmarshal(body, &schema); err != nil {
+		return nil, err
+	}
+
+	res := []string{}
+	for k := range schema.Properties {
+		res = append(res, k)
+	}
+	return res, nil
 }

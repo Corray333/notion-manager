@@ -27,7 +27,7 @@ func (a *App) Run() {
 	router := chi.NewMux()
 	store := storage.NewStorage()
 
-	router.Post("/projects", handlers.NewProject(store))
+	// router.Post("/projects", handlers.NewProject(store))
 	router.Patch("/sync", handlers.UpdateDatabases(store))
 	router.Get("/fix", handlers.GetToBeUpdated(store))
 

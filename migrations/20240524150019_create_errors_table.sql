@@ -12,5 +12,5 @@ CREATE TABLE IF NOT EXISTS errors(
 
 -- +goose Down
 -- +goose StatementBegin
-SELECT 'down SQL query';
+DROP TABLE errors;
 -- +goose StatementEnd
