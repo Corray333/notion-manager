@@ -1,0 +1,5 @@
+.env
+notion.db
+cmd/main
+*.json
+secrets
