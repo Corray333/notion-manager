@@ -26,6 +26,10 @@
   color: var(--dark);
 }
 
+body{
+  background-color: #fff;
+}
+
 #app{
   display: flex;
   justify-content: center;
