@@ -31,6 +31,7 @@ func (a *App) Run() {
 
 	// TODO: get allowed origins, headers and methods from cfg
 	router.Use(cors.Handler(cors.Options{
+		AllowedOrigins: []string{"http://*", "https://*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "Set-Cookie", "Refresh", "X-CSRF-Token"},
 		AllowCredentials: true,

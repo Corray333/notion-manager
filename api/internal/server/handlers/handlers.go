@@ -120,6 +120,7 @@ func UpdateGoogleSheets(w http.ResponseWriter, r *http.Request) {
 	err := gsheets.UpdateGoogleSheets()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		slog.Error(err.Error())
 		return
 	}
 	w.WriteHeader(http.StatusOK)
