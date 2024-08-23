@@ -11,12 +11,10 @@ services:
   
   app:  
     image: node:latest
-    command: npm run dev
+    command: npm run build
     volumes:
       - ./app:/app
     working_dir: /app
-    environment:
-      - HOST=0.0.0.0
   
   nginx:
     image: nginx:latest
