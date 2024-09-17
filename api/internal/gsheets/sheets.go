@@ -23,7 +23,7 @@ const (
 
 func GetLastSyncedTime(srv *sheets.Service, spreadsheetId string) (int64, error) {
 
-	readRange := "Sheet1!W2"
+	readRange := "Sheet1!X2"
 	resp, err := srv.Spreadsheets.Values.Get(spreadsheetId, readRange).Do()
 	if err != nil {
 		log.Fatalf("Unable to retrieve data from sheet: %v", err)
@@ -46,7 +46,7 @@ func GetLastSyncedTime(srv *sheets.Service, spreadsheetId string) (int64, error)
 }
 
 func SetLastSyncedTime(lastSyncedTimestamp int64, srv *sheets.Service, spreadsheetId string) error {
-	writeRange := "Sheet1!W2"
+	writeRange := "Sheet1!X2"
 
 	lastSynced := time.Unix(lastSyncedTimestamp, 0)
 
@@ -90,9 +90,18 @@ func UpdateGoogleSheets() error {
 		return err
 	}
 
-	writeRange := "Sheet1!A3:F3"
+	readRange := "Sheet1!W:W" // H:H - весь первый столбец
+	fullTable, err := srv.Spreadsheets.Values.Get(spreadsheetId, readRange).Do()
+	if err != nil {
+		return err
+	}
+
+	writeRange := "Sheet1!A3:W3"
 	var vr sheets.ValueRange
 	times, err := notion.GetTimes(lastSynced, "", "")
+	if err != nil {
+		return err
+	}
 
 	fmt.Println(len(times), err)
 	for _, timeRaw := range times {
@@ -107,6 +116,13 @@ func UpdateGoogleSheets() error {
 		for _, name := range timeRaw.Properties.WhatDid.Title {
 			title += name.PlainText
 		}
+
+		rawId, err := findRowIndexByID(fullTable, timeRaw.ID)
+
+		if err != nil {
+			return err
+		}
+
 		myval := []interface{}{
 			fmt.Sprintf(`=HYPERLINK("%s"; "%s")`, timeRaw.URL, title),
 			timeRaw.Properties.TotalHours.Number,
@@ -157,7 +173,20 @@ func UpdateGoogleSheets() error {
 			timeRaw.Properties.BHGS.Formula.String,
 			timeRaw.Properties.MonthNumber.Formula.Number,
 			timeRaw.Properties.WeekNumber.Formula.Number,
+			timeRaw.Properties.DayNumber.Formula.Number,
+			timeRaw.Properties.ProjectStatus.Formula.String,
+			timeRaw.ID,
 		}...)
+
+		if rawId != -1 {
+			fmt.Printf("Обновление на %d: %+v", rawId, myval)
+			_, err = srv.Spreadsheets.Values.Update(spreadsheetId, fmt.Sprintf("Sheet1!A%d:W%d", rawId, rawId), &sheets.ValueRange{Values: [][]interface{}{myval}}).ValueInputOption("USER_ENTERED").Do()
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
 		vr.Values = append(vr.Values, myval)
 
 	}
@@ -169,4 +198,21 @@ func UpdateGoogleSheets() error {
 
 	return SetLastSyncedTime(lastSynced, srv, spreadsheetId)
 
+}
+
+func findRowIndexByID(table *sheets.ValueRange, id string) (int, error) {
+	// Определяем диапазон, который будем получать (весь лист)
+
+	// Ищем строку с нужным значением
+	for i, row := range table.Values {
+		if len(row) > 0 && row[0] == id {
+			// Возвращаем индекс строки (в Google Sheets строки индексируются с 1)
+			fmt.Println("Found: ", i+1)
+			return i + 1, nil
+		}
+	}
+
+	fmt.Println("Not found")
+	// Если значение не найдено, возвращаем -1
+	return -1, nil
 }

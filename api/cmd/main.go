@@ -11,4 +11,6 @@ func main() {
 
 	server.NewApp().Run()
 
+	// fmt.Println(gsheets.UpdateGoogleSheets())
+
 }

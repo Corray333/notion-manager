@@ -181,6 +181,9 @@ func SearchPages(dbid string, filter map[string]interface{}) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("notion error %s while searching pages with body %s", string(body), string(data))
+	}
 
 	return body, nil
 }

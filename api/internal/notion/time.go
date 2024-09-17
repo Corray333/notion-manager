@@ -94,6 +94,11 @@ type Time struct {
 				String string `json:"string"`
 			} `json:"formula"`
 		} `json:"Имя проекта"`
+		ProjectStatus struct {
+			Formula struct {
+				String string `json:"string"`
+			} `json:"formula"`
+		} `json:"Статус проекта"`
 		WhatDid struct {
 			Title []struct {
 				PlainText string `json:"plain_text"`
@@ -120,6 +125,11 @@ type Time struct {
 				Number float64 `json:"number"`
 			} `json:"formula"`
 		} `json:"Номер недели"`
+		DayNumber struct {
+			Formula struct {
+				Number float64 `json:"number"`
+			} `json:"formula"`
+		} `json:"Номер дня"`
 		MonthNumber struct {
 			Formula struct {
 				Number float64 `json:"number"`
@@ -169,8 +179,8 @@ func GetTimes(lastSynced int64, projectID string, cursor string) ([]Time, error)
 			"filter": map[string]interface{}{
 				"and": []map[string]interface{}{
 					{
-						"timestamp": "created_time",
-						"created_time": map[string]interface{}{
+						"timestamp": "last_edited_time",
+						"last_edited_time": map[string]interface{}{
 							"after": time.Unix(lastSynced, 0).Format(TIME_LAYOUT_IN),
 						},
 					},
@@ -196,8 +206,8 @@ func GetTimes(lastSynced int64, projectID string, cursor string) ([]Time, error)
 	} else {
 		req = map[string]interface{}{
 			"filter": map[string]interface{}{
-				"timestamp": "created_time",
-				"created_time": map[string]interface{}{
+				"timestamp": "last_edited_time",
+				"last_edited_time": map[string]interface{}{
 					"after": time.Unix(lastSynced, 0).Format(TIME_LAYOUT),
 				},
 			},
@@ -211,7 +221,6 @@ func GetTimes(lastSynced int64, projectID string, cursor string) ([]Time, error)
 	}
 
 	if cursor != "" {
-
 		fmt.Println("Next cursor applied")
 		req["start_cursor"] = cursor
 	}
