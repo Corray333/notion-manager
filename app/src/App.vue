@@ -12,7 +12,7 @@ onBeforeMount(() => {
     const user = tg.initDataUnsafe.user;
 
     if (user) {
-      if (user.username == "incetro" || user.username == "corray9") authorized.value=true
+      if (user.username == "incetro" || user.username == "corray9" || user.username == "yourpendos" || user.username == "dmitry_savinov" || user.username == "lybybyska00") authorized.value = true
       console.log("ID пользователя: ", user.id);
       console.log("Имя пользователя: ", user.first_name);
       console.log("Фамилия пользователя: ", user.last_name);
@@ -87,7 +87,8 @@ const syncGSheets = async () => {
       <Alert v-for="alert in alerts" :key="alert.id" :alert="alert" class="" />
     </transition-group>
   </div>
-  <h1 v-if="!authorized">Куда это ты тянешь свои ручки?😑<br/>Я тебя не знаю, обратись к <a href="https://t.me/incetro" class=" underline">Андрею</a></h1>
+  <h1 v-if="!authorized">Куда это ты тянешь свои ручки?😑<br />Я тебя не знаю, обратись к <a href="https://t.me/incetro"
+      class=" underline">Андрею</a></h1>
   <section v-else class="p-5 flex flex-col items-center rounded-xl controls gap-2 bg-white w-full  max-w-96">
     <h1 class="font-bold text-2xl">Панель управления</h1>
     <section class="flex flex-col items-center w-full gap-2">
