@@ -104,7 +104,7 @@ func UpdateGoogleSheets() error {
 		return err
 	}
 
-	updateRequests := make([]UpdateRequest, 0)
+	var updateVr []*sheets.ValueRange
 
 	fmt.Println(len(times), err)
 	for _, timeRaw := range times {
@@ -182,16 +182,11 @@ func UpdateGoogleSheets() error {
 		}...)
 
 		if rawId != -1 {
-			updateReq := UpdateRequest{
-				RawID: rawId,
-				Value: myval,
+			uvr := sheets.ValueRange{
+				Values: [][]interface{}{myval},
+				Range:  fmt.Sprintf("Sheet1!A%d:W%d", rawId, rawId),
 			}
-			updateRequests = append(updateRequests, updateReq)
-			// fmt.Printf("Обновление на %d: %+v", rawId, myval)
-			// _, err = srv.Spreadsheets.Values.Update(spreadsheetId, fmt.Sprintf("Sheet1!A%d:W%d", rawId, rawId), &sheets.ValueRange{Values: [][]interface{}{myval}}).ValueInputOption("USER_ENTERED").Do()
-			// if err != nil {
-			// 	return err
-			// }
+			updateVr = append(updateVr, &uvr)
 			continue
 		}
 
@@ -201,7 +196,11 @@ func UpdateGoogleSheets() error {
 
 	writeRange := "Sheet1!A3:W3"
 
-	err = applyUpdates(srv, spreadsheetId, updateRequests)
+	_, err = srv.Spreadsheets.Values.BatchUpdate(spreadsheetId, &sheets.BatchUpdateValuesRequest{
+		ValueInputOption: "USER_ENTERED",
+		Data:             updateVr,
+	}).Do()
+
 	if err != nil {
 		return err
 	}
@@ -220,49 +219,9 @@ type UpdateRequest struct {
 	Value interface{}
 }
 
-func applyUpdates(srv *sheets.Service, spreadsheetId string, updates []UpdateRequest) error {
-	for i := 0; i < len(updates); i += MaxRequestsPerMinute {
-		k := i + MaxRequestsPerMinute
-		if k > len(updates) {
-			k = len(updates)
-		}
-		batch := updates[i:k]
-		slog.Info("Updating new batch")
-		for _, update := range batch {
-			vr := sheets.ValueRange{
-				Values: [][]interface{}{update.Value.([]interface{})},
-			}
-			_, err := srv.Spreadsheets.Values.Update(spreadsheetId, fmt.Sprintf("Sheet1!A%d:W%d", update.RawID, update.RawID), &vr).ValueInputOption("USER_ENTERED").Do()
-			if err != nil {
-				return err
-			}
-		}
-		time.Sleep(1 * time.Minute)
-	}
-	return nil
-}
-
 const (
 	MaxRequestsPerMinute = 60
 )
-
-func upload(srv *sheets.Service, spreadsheetId string, vr *sheets.ValueRange) error {
-	writeRange := "Sheet1!A3:W3"
-
-	// Upload in batches of 300 with 1 minute wait
-	for i := 0; i < len(vr.Values); i += MaxRequestsPerMinute {
-		k := i + MaxRequestsPerMinute
-		if k > len(vr.Values) {
-			k = len(vr.Values)
-		}
-		_, err := srv.Spreadsheets.Values.Append(spreadsheetId, writeRange, &sheets.ValueRange{Values: vr.Values[i:k]}).ValueInputOption("USER_ENTERED").InsertDataOption("INSERT_ROWS").Do()
-		if err != nil {
-			return err
-		}
-		time.Sleep(1 * time.Minute)
-	}
-	return nil
-}
 
 func findRowIndexByID(table *sheets.ValueRange, id string) (int, error) {
 	// Определяем диапазон, который будем получать (весь лист)
