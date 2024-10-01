@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -67,6 +68,7 @@ func SetLastSyncedTime(lastSyncedTimestamp int64, srv *sheets.Service, spreadshe
 }
 
 func UpdateGoogleSheets() error {
+	slog.Info("Updating Google Sheets")
 	b, err := os.ReadFile("../secrets/credentials.json")
 	if err != nil {
 		return err
@@ -96,12 +98,13 @@ func UpdateGoogleSheets() error {
 		return err
 	}
 
-	writeRange := "Sheet1!A3:W3"
 	var vr sheets.ValueRange
 	times, err := notion.GetTimes(lastSynced, "", "")
 	if err != nil {
 		return err
 	}
+
+	updateRequests := make([]UpdateRequest, 0)
 
 	fmt.Println(len(times), err)
 	for _, timeRaw := range times {
@@ -110,7 +113,7 @@ func UpdateGoogleSheets() error {
 		if date.Before(date2) {
 			date = date2
 		}
-		lastSyncedRaw, _ := time.Parse(notion.TIME_LAYOUT_IN, timeRaw.CreatedTime)
+		lastSyncedRaw, _ := time.Parse(notion.TIME_LAYOUT_IN, timeRaw.LastEditedTime)
 		lastSynced = lastSyncedRaw.Unix()
 		title := ""
 		for _, name := range timeRaw.Properties.WhatDid.Title {
@@ -179,16 +182,28 @@ func UpdateGoogleSheets() error {
 		}...)
 
 		if rawId != -1 {
-			fmt.Printf("Обновление на %d: %+v", rawId, myval)
-			_, err = srv.Spreadsheets.Values.Update(spreadsheetId, fmt.Sprintf("Sheet1!A%d:W%d", rawId, rawId), &sheets.ValueRange{Values: [][]interface{}{myval}}).ValueInputOption("USER_ENTERED").Do()
-			if err != nil {
-				return err
+			updateReq := UpdateRequest{
+				RawID: rawId,
+				Value: myval,
 			}
+			updateRequests = append(updateRequests, updateReq)
+			// fmt.Printf("Обновление на %d: %+v", rawId, myval)
+			// _, err = srv.Spreadsheets.Values.Update(spreadsheetId, fmt.Sprintf("Sheet1!A%d:W%d", rawId, rawId), &sheets.ValueRange{Values: [][]interface{}{myval}}).ValueInputOption("USER_ENTERED").Do()
+			// if err != nil {
+			// 	return err
+			// }
 			continue
 		}
 
 		vr.Values = append(vr.Values, myval)
 
+	}
+
+	writeRange := "Sheet1!A3:W3"
+
+	err = applyUpdates(srv, spreadsheetId, updateRequests)
+	if err != nil {
+		return err
 	}
 
 	_, err = srv.Spreadsheets.Values.Append(spreadsheetId, writeRange, &vr).ValueInputOption("USER_ENTERED").InsertDataOption("INSERT_ROWS").Do()
@@ -198,6 +213,55 @@ func UpdateGoogleSheets() error {
 
 	return SetLastSyncedTime(lastSynced, srv, spreadsheetId)
 
+}
+
+type UpdateRequest struct {
+	RawID int
+	Value interface{}
+}
+
+func applyUpdates(srv *sheets.Service, spreadsheetId string, updates []UpdateRequest) error {
+	for i := 0; i < len(updates); i += MaxRequestsPerMinute {
+		k := i + MaxRequestsPerMinute
+		if k > len(updates) {
+			k = len(updates)
+		}
+		batch := updates[i:k]
+		slog.Info("Updating new batch")
+		for _, update := range batch {
+			vr := sheets.ValueRange{
+				Values: [][]interface{}{update.Value.([]interface{})},
+			}
+			_, err := srv.Spreadsheets.Values.Update(spreadsheetId, fmt.Sprintf("Sheet1!A%d:W%d", update.RawID, update.RawID), &vr).ValueInputOption("USER_ENTERED").Do()
+			if err != nil {
+				return err
+			}
+		}
+		time.Sleep(1 * time.Minute)
+	}
+	return nil
+}
+
+const (
+	MaxRequestsPerMinute = 60
+)
+
+func upload(srv *sheets.Service, spreadsheetId string, vr *sheets.ValueRange) error {
+	writeRange := "Sheet1!A3:W3"
+
+	// Upload in batches of 300 with 1 minute wait
+	for i := 0; i < len(vr.Values); i += MaxRequestsPerMinute {
+		k := i + MaxRequestsPerMinute
+		if k > len(vr.Values) {
+			k = len(vr.Values)
+		}
+		_, err := srv.Spreadsheets.Values.Append(spreadsheetId, writeRange, &sheets.ValueRange{Values: vr.Values[i:k]}).ValueInputOption("USER_ENTERED").InsertDataOption("INSERT_ROWS").Do()
+		if err != nil {
+			return err
+		}
+		time.Sleep(1 * time.Minute)
+	}
+	return nil
 }
 
 func findRowIndexByID(table *sheets.ValueRange, id string) (int, error) {

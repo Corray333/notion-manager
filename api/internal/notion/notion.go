@@ -155,14 +155,14 @@ func StartSync(store Storage) error {
 }
 
 func SearchPages(dbid string, filter map[string]interface{}) ([]byte, error) {
-	url := "https://api.notion.com/v1/databases/" + dbid + "/query"
+	urlStr := "https://api.notion.com/v1/databases/" + dbid + "/query"
 
 	data, err := json.Marshal(filter)
 	if err != nil {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
+	req, err := http.NewRequest("POST", urlStr, bytes.NewBuffer(data))
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,19 @@ func SearchPages(dbid string, filter map[string]interface{}) ([]byte, error) {
 	req.Header.Set("Notion-Version", "2022-06-28")
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	// proxyURL, err := url.Parse("http://uLQaWYgF:HTPiw5k5@136.0.78.192:64648")
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// transport := &http.Transport{
+	// 	Proxy: http.ProxyURL(proxyURL),
+	// }
+
+	client := &http.Client{
+		// Transport: transport,
+	}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

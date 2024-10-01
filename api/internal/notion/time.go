@@ -18,9 +18,10 @@ var (
 )
 
 type Time struct {
-	ID          string `json:"id"`
-	CreatedTime string `json:"created_time"`
-	Properties  struct {
+	ID             string `json:"id"`
+	CreatedTime    string `json:"created_time"`
+	LastEditedTime string `json:"last_edited_time"`
+	Properties     struct {
 		TotalHours struct {
 			Number float64 `json:"number"`
 		} `json:"Всего ч"`
