@@ -1,0 +1,207 @@
+definitions:
+  entities.Employee:
+    properties:
+      email:
+        example: s0177180@edu.kubsu.ru
+        type: string
+      icon:
+        example: https://prod-files-secure.s3.us-west-2.amazonaws.com/9a2e0635-b9d4-4178-a529-cf6b3bdce29d/f2f425d1-efde-46ee-a724-78dcd401bff0/Frame_3.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAT73L2G45HZZMZUHI%2F20241014%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20241014T062630Z&X-Amz-Expires=3600&X-Amz-Signature=195ddfb2599f4d4e6162d1e467966af275d2bad346414fdb574f61049757e40f&X-Amz-SignedHeaders=host&x-id=GetObject
+        type: string
+      id:
+        example: 790bdb23-c2d3-4154-8497-2ef5f1e6d2ad
+        type: string
+      username:
+        example: Mark
+        type: string
+    type: object
+  entities.Project:
+    properties:
+      icon:
+        example: https://prod-files-secure.s3.us-west-2.amazonaws.com/9a2e0635-b9d4-4178-a529-cf6b3bdce29d/7d460da2-42b7-4d5b-8d31-97a327675bc4/behance-1.svg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAT73L2G45HZZMZUHI%2F20241014%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20241014T055949Z&X-Amz-Expires=3600&X-Amz-Signature=c67998b0c68723e6efb6268baf917f6ae9e4902238a2b146cb054a6cda51c7cf&X-Amz-SignedHeaders=host&x-id=GetObject
+        type: string
+      iconType:
+        example: file
+        type: string
+      id:
+        example: 1114675b-93d2-4d67-ad0c-8851b6134af2
+        type: string
+      name:
+        example: Behance
+        type: string
+    type: object
+  entities.Task:
+    description: Represents a task in the system
+    properties:
+      employeeID:
+        example: 353198d1-1a40-4b4b-9841-66e7de4de6ea
+        type: string
+      id:
+        example: 9eb9de5f-2341-44c6-aae8-fc917394092b
+        type: string
+      projectID:
+        example: 268c4871-39fd-4c78-9681-4d62ae34dcee
+        type: string
+      status:
+        example: В работе
+        type: string
+      title:
+        example: Доделать прототип тайм трекера
+        type: string
+    type: object
+  entities.TimeMsg:
+    description: Represents a time
+    properties:
+      description:
+        example: Мыла попу
+        type: string
+      duration:
+        example: 1800
+        type: integer
+      employeeID:
+        example: 353198d1-1a40-4b4b-9841-66e7de4de6ea
+        type: string
+      id:
+        example: 0
+        type: integer
+      taskID:
+        example: 9eb9de5f-2341-44c6-aae8-fc917394092b
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /tracker/employees:
+    get:
+      description: Retrieves a list of employees.
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entities.Employee'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get all employees
+      tags:
+      - employees
+  /tracker/projects:
+    get:
+      description: Retrieves a list of projects for a user by user_id.
+      parameters:
+      - description: User ID
+        in: query
+        name: user_id
+        required: true
+        type: string
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entities.Project'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get projects for a specific user
+      tags:
+      - projects
+  /tracker/tasks:
+    get:
+      description: Retrieves a list of tasks for a user and project by user_id and
+        project_id.
+      parameters:
+      - description: User ID
+        in: query
+        name: user_id
+        required: true
+        type: string
+      - description: Project ID
+        in: query
+        name: project_id
+        required: true
+        type: string
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of tasks
+          schema:
+            items:
+              $ref: '#/definitions/entities.Task'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get tasks for a specific project and user
+      tags:
+      - tasks
+  /tracker/time:
+    post:
+      consumes:
+      - application/json
+      description: Writes the time spent on a task.
+      parameters:
+      - description: Bearer token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Time data
+        in: body
+        name: time
+        required: true
+        schema:
+          $ref: '#/definitions/entities.TimeMsg'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Record the time spent on a task
+      tags:
+      - time
+swagger: "2.0"

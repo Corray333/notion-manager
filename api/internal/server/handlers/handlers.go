@@ -126,3 +126,8 @@ func UpdateGoogleSheets(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 }
+
+func GetEmployees()
+func GetProjects()
+func GetTasks()
+func WriteOfTime()

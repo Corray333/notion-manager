@@ -358,29 +358,29 @@ func FixBroken(store Storage) error {
 
 }
 
-func getWorker(dbid, workerId string) (*Worker, error) {
-	filter := map[string]interface{}{
-		"filter": map[string]interface{}{
-			"property": "Ссылка",
-			"people": map[string]interface{}{
-				"contains": workerId,
-			},
-		},
-	}
+// func getWorker(dbid, workerId string) (*Worker, error) {
+// 	filter := map[string]interface{}{
+// 		"filter": map[string]interface{}{
+// 			"property": "Ссылка",
+// 			"people": map[string]interface{}{
+// 				"contains": workerId,
+// 			},
+// 		},
+// 	}
 
-	resp, err := SearchPages(dbid, filter)
-	if err != nil {
-		return nil, err
-	}
-	worker := struct {
-		Results []Worker `json:"results"`
-	}{}
-	json.Unmarshal(resp, &worker)
-	if len(worker.Results) == 0 {
-		return nil, fmt.Errorf("worker not found: %s", string(resp))
-	}
-	return &worker.Results[0], nil
-}
+// 	resp, err := SearchPages(dbid, filter)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	worker := struct {
+// 		Results []Worker `json:"results"`
+// 	}{}
+// 	json.Unmarshal(resp, &worker)
+// 	if len(worker.Results) == 0 {
+// 		return nil, fmt.Errorf("worker not found: %s", string(resp))
+// 	}
+// 	return &worker.Results[0], nil
+// }
 
 var icons = map[string]string{
 	"iOS":     "https://i.postimg.cc/kGZPbxtx/ios.png",
