@@ -1,5 +1,11 @@
 package entities
 
+import "fmt"
+
+type MsgCreator interface {
+	ToMsg() string
+}
+
 // TimeMsg godoc
 // @Description Represents a time
 type TimeMsg struct {
@@ -18,6 +24,10 @@ type Task struct {
 	Status     string  `json:"status" db:"status" example:"В работе"`
 	ProjectID  *string `json:"projectID" db:"project_id" example:"268c4871-39fd-4c78-9681-4d62ae34dcee"`
 	EmployeeID *string `json:"employeeID" db:"employee_id" example:"353198d1-1a40-4b4b-9841-66e7de4de6ea"`
+}
+
+func (t Task) ToMsg() string {
+	return fmt.Sprintf("Ошибка в задаче: [%s](%s)", t.Title, "notion.so/"+t.ID)
 }
 
 type Project struct {
@@ -39,4 +49,14 @@ type System struct {
 	ProjectsDBLastSynced int64 `json:"projectsDBLastSynced" db:"projects_db_last_sync"`
 	TasksDBLastSynced    int64 `json:"tasksDBLastSynced" db:"tasks_db_last_sync"`
 	EmployeeDBLastSynced int64 `json:"employeeDBLastSynced" db:"employee_db_last_sync"`
+	TimesDBLastSynced    int64 `json:"timesDBLastSynced" db:"times_db_last_sync"`
+}
+
+type Time struct {
+	Description string `json:"description" db:"description" example:"Мыла попу"`
+	ID          string `json:"id" db:"time_id" example:"790bdb23-c2d3-4154-8497-2ef5f1e6d2ad"`
+}
+
+func (t Time) ToMsg() string {
+	return fmt.Sprintf("Ошибка в записи времени: [%s](%s)", t.Description, "notion.so/"+t.ID)
 }

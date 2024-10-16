@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/Corray333/task_tracker/internal/entities"
@@ -29,8 +30,11 @@ type external interface {
 	GetEmployees(lastSynced int64) (employees []entities.Employee, lastUpdate int64, err error)
 	GetTasks(lastSynced int64, startCursor string) (tasks []entities.Task, lastUpdate int64, err error)
 	GetProjects(lastSynced int64) (projects []entities.Project, lastUpdate int64, err error)
+	GetTimes(lastSynced int64) (times []entities.Time, lastUpdate int64, err error)
 
 	WriteOfTime(time *entities.TimeMsg) error
+
+	SendNotification(msg entities.MsgCreator) error
 }
 
 type Service struct {
@@ -98,6 +102,13 @@ func (s *Service) Actualize() (updated bool, err error) {
 		return false, err
 	}
 
+	fmt.Println("Getting times")
+	times, timesLastUpdate, err := s.external.GetTimes(system.TimesDBLastSynced)
+	if err != nil {
+		return false, err
+	}
+	s.ValidateTimes(times)
+
 	fmt.Println("Getting employees")
 	employees, employeesLastUpdate, err := s.external.GetEmployees(system.EmployeeDBLastSynced)
 	if err != nil {
@@ -122,6 +133,8 @@ func (s *Service) Actualize() (updated bool, err error) {
 		return false, err
 	}
 
+	s.ValidateTasks(tasks)
+
 	if err := s.repo.SetTasks(tasks); err != nil {
 		return false, err
 	}
@@ -129,6 +142,7 @@ func (s *Service) Actualize() (updated bool, err error) {
 	system.EmployeeDBLastSynced = employeesLastUpdate
 	system.ProjectsDBLastSynced = projectsLastUpdate
 	system.TasksDBLastSynced = tasksLastUpdate
+	system.TimesDBLastSynced = timesLastUpdate
 
 	s.repo.SetSystemInfo(system)
 
@@ -137,4 +151,48 @@ func (s *Service) Actualize() (updated bool, err error) {
 
 func (s *Service) WriteOfTime(time *entities.TimeMsg) error {
 	return s.repo.SaveTimeWriteOf(time)
+}
+
+var forbiddenWords = []string{
+	"Фикс",
+	"Пофиксить",
+	"Фиксить",
+	"Правка",
+	"Править",
+	"Поправить",
+	"Исправить",
+	"Правки",
+	"Исправление",
+	"Баг",
+	"Безуспешно",
+	"Разобраться",
+}
+
+func containsForbiddenWord(input string) bool {
+	lowerInput := strings.ToLower(input)
+	for _, word := range forbiddenWords {
+		if strings.Contains(lowerInput, strings.ToLower(word)) {
+			return true
+		}
+	}
+	return false
+}
+
+// TODO: replace with outbox pattern
+func (s *Service) ValidateTimes(times []entities.Time) {
+	for _, time := range times {
+		if containsForbiddenWord(time.Description) {
+			// Handle error: mark time as checked if it's correct or sent to manager
+			s.external.SendNotification(time)
+		}
+	}
+}
+
+func (s *Service) ValidateTasks(tasks []entities.Task) {
+	for _, task := range tasks {
+		if containsForbiddenWord(task.Title) {
+			// Handle error: mark task as checked if it's correct or sent to manager
+			s.external.SendNotification(task)
+		}
+	}
 }

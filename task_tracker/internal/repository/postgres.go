@@ -171,7 +171,7 @@ func (s *Storage) SetSystemInfo(system *entities.System) error {
 	}
 	defer tx.Rollback()
 
-	_, err = tx.Exec("UPDATE system SET projects_db_last_sync = $1, tasks_db_last_sync = $2, employee_db_last_sync = $3", system.ProjectsDBLastSynced, system.TasksDBLastSynced, system.EmployeeDBLastSynced)
+	_, err = tx.Exec("UPDATE system SET projects_db_last_sync = $1, tasks_db_last_sync = $2, employee_db_last_sync = $3, times_db_last_sync = $4", system.ProjectsDBLastSynced, system.TasksDBLastSynced, system.EmployeeDBLastSynced, system.TimesDBLastSynced)
 	if err != nil {
 		slog.Error("error updating system info: " + err.Error())
 		return err

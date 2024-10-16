@@ -2,19 +2,45 @@ package external
 
 import (
 	"encoding/json"
+	"log"
 	"log/slog"
 	"os"
 	"time"
 
 	"github.com/Corray333/task_tracker/internal/entities"
 	"github.com/Corray333/task_tracker/pkg/notion"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type External struct {
+	tg *TelegramClient
+}
+
+type TelegramClient struct {
+	bot *tgbotapi.BotAPI
+}
+
+func (t *TelegramClient) GetBot() *tgbotapi.BotAPI {
+	return t.bot
+}
+
+func NewClient(token string) *TelegramClient {
+	bot, err := tgbotapi.NewBotAPI(token)
+	if err != nil {
+		log.Fatal("failed to create bot: ", err)
+	}
+
+	bot.Debug = true
+
+	return &TelegramClient{
+		bot: bot,
+	}
 }
 
 func New() *External {
-	return &External{}
+	return &External{
+		tg: NewClient(os.Getenv("BOT_TOKEN")),
+	}
 }
 
 // Worker
@@ -88,6 +114,12 @@ func (e *External) GetEmployees(lastSynced int64) (employees []entities.Employee
 				"after": time.Unix(lastSynced, 0).Format(notion.TIME_LAYOUT),
 			},
 		},
+		"sorts": []map[string]interface{}{
+			{
+				"timestamp": "created_time",
+				"direction": "ascending",
+			},
+		},
 	}
 
 	resp, err := notion.SearchPages(os.Getenv("EMPLOYEES_DB"), filter)
@@ -107,7 +139,13 @@ func (e *External) GetEmployees(lastSynced int64) (employees []entities.Employee
 	employees = []entities.Employee{}
 	for _, w := range worker.Results {
 		employees = append(employees, entities.Employee{
-			ID: w.ID,
+			ID: func() string {
+				if len(w.Properties.Link.People) == 0 {
+					return ""
+				} else {
+					return w.Properties.Link.People[0].ID
+				}
+			}(),
 			Username: func() string {
 				if len(w.Properties.Name.Title) == 0 {
 					return ""
@@ -206,6 +244,12 @@ func (e *External) GetTasks(lastSynced int64, startCursor string) (tasks []entit
 			"timestamp": "last_edited_time",
 			"last_edited_time": map[string]interface{}{
 				"after": time.Unix(lastSynced, 0).Format(notion.TIME_LAYOUT),
+			},
+		},
+		"sorts": []map[string]interface{}{
+			{
+				"timestamp": "created_time",
+				"direction": "ascending",
 			},
 		},
 	}
@@ -319,6 +363,12 @@ func (e *External) GetProjects(lastSynced int64) (projects []entities.Project, l
 			"timestamp": "last_edited_time",
 			"last_edited_time": map[string]interface{}{
 				"after": time.Unix(lastSynced, 0).Format(notion.TIME_LAYOUT),
+			},
+		},
+		"sorts": []map[string]interface{}{
+			{
+				"timestamp": "created_time",
+				"direction": "ascending",
 			},
 		},
 	}
