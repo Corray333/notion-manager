@@ -32,7 +32,6 @@ func New() *app {
 }
 
 func (app *app) Run() {
-	go app.service.StartUpdatingWorker()
-	go app.service.StartOutboxWorker()
+	go app.service.Run()
 	app.transport.Run()
 }

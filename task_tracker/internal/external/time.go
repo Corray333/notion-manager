@@ -2,6 +2,7 @@ package external
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -51,6 +52,7 @@ type Time struct {
 		WhoDid struct {
 			People []struct {
 				Name string `json:"name"`
+				ID   string `json:"id"`
 			} `json:"people"`
 		} `json:"Исполнитель"`
 		EstimateHours struct {
@@ -133,7 +135,7 @@ type Time struct {
 	URL string `json:"url"`
 }
 
-func (e *External) GetTimes(lastSynced int64) (times []entities.Time, lastUpdate int64, err error) {
+func (e *External) GetTimes(lastSynced int64, startCursor string) (times []entities.Time, lastUpdate int64, err error) {
 	filter := map[string]interface{}{
 		"filter": map[string]interface{}{
 			"timestamp": "last_edited_time",
@@ -149,22 +151,47 @@ func (e *External) GetTimes(lastSynced int64) (times []entities.Time, lastUpdate
 		},
 	}
 
+	if startCursor != "" {
+		filter["start_cursor"] = startCursor
+	}
+	lastUpdate = 0
+
 	resp, err := notion.SearchPages(os.Getenv("TIMES_DB"), filter)
 	if err != nil {
 		return nil, 0, err
 	}
-	project := struct {
-		Results []Time `json:"results"`
+	timeResults := struct {
+		Results    []Time `json:"results"`
+		HasMore    bool   `json:"has_more"`
+		NextCursor string `json:"next_cursor"`
 	}{}
-	if err := json.Unmarshal(resp, &project); err != nil {
+	if err := json.Unmarshal(resp, &timeResults); err != nil {
 		return nil, 0, err
 	}
 
 	times = []entities.Time{}
-	for _, w := range project.Results {
+	for _, w := range timeResults.Results {
 		times = append(times, entities.Time{
-			Description: w.Properties.WhatDid.Title[0].PlainText,
-			ID:          strings.ReplaceAll(w.ID, "-", ""),
+			Description: func() string {
+				if len(w.Properties.WhatDid.Title) == 0 {
+					return ""
+				}
+
+				return w.Properties.WhatDid.Title[0].PlainText
+			}(),
+			ID: strings.ReplaceAll(w.ID, "-", ""),
+			Employee: func() string {
+				if len(w.Properties.WhoDid.People) == 0 {
+					return ""
+				}
+				return w.Properties.WhoDid.People[0].Name
+			}(),
+			EmployeeID: func() string {
+				if len(w.Properties.WhoDid.People) == 0 {
+					return ""
+				}
+				return w.Properties.WhoDid.People[0].ID
+			}(),
 		})
 
 		lastEditedTime, err := time.Parse(notion.TIME_LAYOUT_IN, w.LastEditedTime)
@@ -174,5 +201,16 @@ func (e *External) GetTimes(lastSynced int64) (times []entities.Time, lastUpdate
 
 		lastUpdate = lastEditedTime.Unix()
 	}
+
+	if timeResults.HasMore {
+		fmt.Println("time has more")
+		nextTasks, lastEditedTime, err := e.GetTimes(lastSynced, timeResults.NextCursor)
+		if err != nil {
+			return nil, 0, err
+		}
+		lastUpdate = lastEditedTime
+		times = append(times, nextTasks...)
+	}
+
 	return times, lastUpdate, nil
 }

@@ -135,13 +135,88 @@ func (s *Storage) SaveTimeWriteOf(time *entities.TimeMsg) error {
 	return nil
 }
 
-func (s *Storage) GetTimes() (times []entities.TimeMsg, err error) {
+func (s *Storage) GetTimesMsg() (times []entities.TimeMsg, err error) {
 	if err = s.DB.Select(&times, "SELECT * FROM time_outbox"); err != nil {
 		slog.Error("error getting time outbox messages: " + err.Error())
 		return nil, err
 	}
 
 	return times, nil
+}
+
+func (s *Storage) GetTimes() (times []entities.Time, err error) {
+	if err = s.DB.Select(&times, "SELECT * FROM times"); err != nil {
+		slog.Error("error getting times: " + err.Error())
+		return nil, err
+	}
+
+	return times, nil
+}
+
+func (s *Storage) GetInvalidRows() (times []entities.Row, err error) {
+	if err = s.DB.Select(&times, "SELECT * FROM invalid_rows"); err != nil {
+		slog.Error("error getting invalid rows: " + err.Error())
+		return nil, err
+	}
+
+	return times, nil
+}
+
+func (s *Storage) MarkInvalidRowsAsSent(rows []entities.Row) error {
+	tx, err := s.DB.Beginx()
+	if err != nil {
+		slog.Error("error starting transaction: " + err.Error())
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, row := range rows {
+		if _, err := tx.Exec("DELETE FROM invalid_rows WHERE id = $1", row.ID); err != nil {
+			slog.Error("error marking invalid rows as sent: " + err.Error())
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (s *Storage) SetInvalidRows(rows []entities.Row) error {
+	tx, err := s.DB.Beginx()
+	if err != nil {
+		slog.Error("error starting transaction: " + err.Error())
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, row := range rows {
+		_, err := tx.Exec("INSERT INTO invalid_rows (id, description, employee, employee_id) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET description = $2, employee = $3, employee_id = $4", row.ID, row.Description, row.Employee, row.EmployeeID)
+		if err != nil {
+			slog.Info(fmt.Sprintf("%+v", row))
+			slog.Error("error setting invalid rows: " + err.Error())
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (s *Storage) SetTimes(times []entities.Time) error {
+	tx, err := s.DB.Beginx()
+	if err != nil {
+		slog.Error("error starting transaction: " + err.Error())
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, time := range times {
+		_, err := tx.Exec("INSERT INTO times (time_id, employee, description) VALUES ($1, $2, $3) ON CONFLICT (time_id) DO UPDATE SET  employee = $2, description = $3", time.ID, time.Employee, time.Description)
+		if err != nil {
+			slog.Error("error setting times: " + err.Error())
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (s *Storage) MarkTimeAsSent(timeID int64) error {
@@ -178,4 +253,13 @@ func (s *Storage) SetSystemInfo(system *entities.System) error {
 	}
 
 	return tx.Commit()
+}
+
+func (s *Storage) GetEmployeeByID(employeeID string) (employee entities.Employee, err error) {
+	if err := s.DB.Get(&employee, "SELECT * FROM employees WHERE employee_id = $1", employeeID); err != nil {
+		slog.Error("error getting employee by id: " + err.Error())
+		return entities.Employee{}, err
+	}
+
+	return employee, nil
 }

@@ -7,46 +7,102 @@ import (
 	"time"
 
 	"github.com/Corray333/task_tracker/internal/entities"
+	"github.com/go-co-op/gocron"
 )
 
 type repository interface {
 	GetEmployees() (employees []entities.Employee, err error)
 	GetProjects(userID string) (projects []entities.Project, err error)
 	GetTasks(userID string, projectID string) (tasks []entities.Task, err error)
-	GetTimes() (times []entities.TimeMsg, err error)
+	GetTimesMsg() (times []entities.TimeMsg, err error)
 
 	SetEmployees(employees []entities.Employee) error
 	SetTasks(tasks []entities.Task) error
 	SetProjects(projects []entities.Project) error
 	SaveTimeWriteOf(time *entities.TimeMsg) error
 
+	GetInvalidRows() (times []entities.Row, err error)
+	SetInvalidRows(times []entities.Row) error
+	MarkInvalidRowsAsSent(times []entities.Row) error
+
 	GetSystemInfo() (*entities.System, error)
 
 	SetSystemInfo(system *entities.System) error
 	MarkTimeAsSent(timeID int64) error
+
+	GetEmployeeByID(employeeID string) (employee entities.Employee, err error)
 }
 
 type external interface {
 	GetEmployees(lastSynced int64) (employees []entities.Employee, lastUpdate int64, err error)
 	GetTasks(lastSynced int64, startCursor string) (tasks []entities.Task, lastUpdate int64, err error)
 	GetProjects(lastSynced int64) (projects []entities.Project, lastUpdate int64, err error)
-	GetTimes(lastSynced int64) (times []entities.Time, lastUpdate int64, err error)
+	GetTimes(lastSynced int64, startCursor string) (times []entities.Time, lastUpdate int64, err error)
 
 	WriteOfTime(time *entities.TimeMsg) error
 
-	SendNotification(msg entities.MsgCreator) error
+	SendNotification(msg []entities.Row) error
 }
 
 type Service struct {
 	repo     repository
 	external external
+	cron     *gocron.Scheduler
 }
 
 func New(repo repository, external external) *Service {
+	loc, _ := time.LoadLocation("Europe/Moscow")
+	s := gocron.NewScheduler(loc)
+
 	return &Service{
 		repo:     repo,
 		external: external,
+		cron:     s,
 	}
+}
+
+func (s *Service) Run() {
+	go s.StartUpdatingWorker()
+	go s.StartOutboxWorker()
+
+	s.cron.Every(1).Day().At("20:00").Do(s.CheckInvalid)
+	s.cron.StartBlocking()
+}
+
+func (s *Service) CheckInvalid() {
+	rows, err := s.repo.GetInvalidRows()
+	if err != nil {
+		slog.Error("error getting times: " + err.Error())
+		return
+	}
+
+	grouped := s.groupByEmployeeID(rows)
+	for _, rows := range grouped {
+		if err := s.external.SendNotification(rows); err != nil {
+			slog.Error("error sending notification: " + err.Error())
+			continue
+		}
+
+		if err := s.repo.MarkInvalidRowsAsSent(rows); err != nil {
+			slog.Error("error marking invalid rows as sent: " + err.Error())
+			continue
+		}
+	}
+
+}
+
+func (s *Service) groupByEmployeeID(rows []entities.Row) map[string][]entities.Row {
+	grouped := map[string][]entities.Row{}
+	for _, row := range rows {
+		if row.Employee == "" && row.EmployeeID != "" {
+			employee, err := s.repo.GetEmployeeByID(row.EmployeeID)
+			if err == nil {
+				row.Employee = employee.Username
+			}
+		}
+		grouped[row.Employee] = append(grouped[row.Employee], row)
+	}
+	return grouped
 }
 
 func (s *Service) StartUpdatingWorker() {
@@ -62,7 +118,7 @@ func (s *Service) StartUpdatingWorker() {
 func (s *Service) StartOutboxWorker() {
 	for {
 		slog.Info("Reading outbox")
-		times, err := s.repo.GetTimes()
+		times, err := s.repo.GetTimesMsg()
 		if err != nil {
 			slog.Error("error getting times: " + err.Error())
 			continue
@@ -103,11 +159,18 @@ func (s *Service) Actualize() (updated bool, err error) {
 	}
 
 	fmt.Println("Getting times")
-	times, timesLastUpdate, err := s.external.GetTimes(system.TimesDBLastSynced)
+	times, timesLastUpdate, err := s.external.GetTimes(system.TimesDBLastSynced, "")
 	if err != nil {
 		return false, err
 	}
-	s.ValidateTimes(times)
+
+	invalidTimes := s.ValidateTimes(times)
+
+	if len(invalidTimes) > 0 {
+		if err := s.repo.SetInvalidRows(invalidTimes); err != nil {
+			return false, err
+		}
+	}
 
 	fmt.Println("Getting employees")
 	employees, employeesLastUpdate, err := s.external.GetEmployees(system.EmployeeDBLastSynced)
@@ -133,7 +196,12 @@ func (s *Service) Actualize() (updated bool, err error) {
 		return false, err
 	}
 
-	s.ValidateTasks(tasks)
+	invalidTasks := s.ValidateTasks(tasks)
+	if len(invalidTasks) > 0 {
+		if err := s.repo.SetInvalidRows(invalidTasks); err != nil {
+			return false, err
+		}
+	}
 
 	if err := s.repo.SetTasks(tasks); err != nil {
 		return false, err
@@ -144,7 +212,9 @@ func (s *Service) Actualize() (updated bool, err error) {
 	system.TasksDBLastSynced = tasksLastUpdate
 	system.TimesDBLastSynced = timesLastUpdate
 
-	s.repo.SetSystemInfo(system)
+	if err := s.repo.SetSystemInfo(system); err != nil {
+		return false, err
+	}
 
 	return len(employees) > 0 || len(projects) > 0 || len(tasks) > 0, nil
 }
@@ -168,31 +238,38 @@ var forbiddenWords = []string{
 	"Разобраться",
 }
 
-func containsForbiddenWord(input string) bool {
+func containsForbiddenWord(input string) (string, bool) {
 	lowerInput := strings.ToLower(input)
 	for _, word := range forbiddenWords {
 		if strings.Contains(lowerInput, strings.ToLower(word)) {
-			return true
+			return word, true
 		}
 	}
-	return false
+	return "", false
 }
 
 // TODO: replace with outbox pattern
-func (s *Service) ValidateTimes(times []entities.Time) {
+func (s *Service) ValidateTimes(times []entities.Time) []entities.Row {
+	invalidTimes := []entities.Row{}
 	for _, time := range times {
-		if containsForbiddenWord(time.Description) {
-			// Handle error: mark time as checked if it's correct or sent to manager
-			s.external.SendNotification(time)
+		if word, contains := containsForbiddenWord(time.Description); contains {
+			time.Description = strings.ReplaceAll(time.Description, strings.ToLower(word), "<b><i>"+strings.ToLower(word)+"</i></b>")
+			time.Description = strings.ReplaceAll(time.Description, word, "<b><i>"+word+"</i></b>")
+			invalidTimes = append(invalidTimes, time.ToRow())
 		}
 	}
+	return invalidTimes
 }
 
-func (s *Service) ValidateTasks(tasks []entities.Task) {
+func (s *Service) ValidateTasks(tasks []entities.Task) []entities.Row {
+	invalidTasks := []entities.Row{}
 	for _, task := range tasks {
-		if containsForbiddenWord(task.Title) {
-			// Handle error: mark task as checked if it's correct or sent to manager
-			s.external.SendNotification(task)
+		if word, contains := containsForbiddenWord(task.Title); contains {
+			task.Title = strings.ReplaceAll(task.Title, strings.ToLower(word), "<b><i>"+strings.ToLower(word)+"</i></b>")
+			task.Title = strings.ReplaceAll(task.Title, word, "<b><i>"+word+"</i></b>")
+			invalidTasks = append(invalidTasks, task.ToRow())
 		}
 	}
+
+	return invalidTasks
 }

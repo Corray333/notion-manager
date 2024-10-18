@@ -2,6 +2,7 @@ package external
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"log/slog"
 	"os"
@@ -276,6 +277,12 @@ func (e *External) GetTasks(lastSynced int64, startCursor string) (tasks []entit
 	for _, w := range task.Results {
 		tasks = append(tasks, entities.Task{
 			ID: w.ID,
+			Employee: func() string {
+				if len(w.Properties.Worker.People) == 0 {
+					return ""
+				}
+				return w.Properties.Worker.People[0].Name
+			}(),
 			Title: func() string {
 				if len(w.Properties.Task.Title) == 0 {
 					return ""
@@ -288,17 +295,17 @@ func (e *External) GetTasks(lastSynced int64, startCursor string) (tasks []entit
 				return title
 			}(),
 			Status: w.Properties.Status.Status.Name,
-			ProjectID: func() *string {
+			ProjectID: func() string {
 				if len(w.Properties.Product.Relation) == 0 {
-					return nil
+					return ""
 				}
-				return &w.Properties.Product.Relation[0].ID
+				return w.Properties.Product.Relation[0].ID
 			}(),
-			EmployeeID: func() *string {
+			EmployeeID: func() string {
 				if len(w.Properties.Worker.People) == 0 {
-					return nil
+					return ""
 				}
-				return &w.Properties.Worker.People[0].ID
+				return w.Properties.Worker.People[0].ID
 			}(),
 		})
 
@@ -310,13 +317,15 @@ func (e *External) GetTasks(lastSynced int64, startCursor string) (tasks []entit
 		lastUpdate = lastEditedTime.Unix()
 	}
 
-	// if task.HasMore {
-	// 	nextTasks, err := e.GetTasks(lastSynced, task.NextCursor)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	tasks = append(tasks, nextTasks...)
-	// }
+	if task.HasMore {
+		fmt.Println("has more")
+		nextTasks, lastEditedTime, err := e.GetTasks(lastSynced, task.NextCursor)
+		if err != nil {
+			return nil, 0, err
+		}
+		lastUpdate = lastEditedTime
+		tasks = append(tasks, nextTasks...)
+	}
 
 	return tasks, lastUpdate, nil
 }

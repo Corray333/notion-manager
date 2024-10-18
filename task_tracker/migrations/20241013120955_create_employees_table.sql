@@ -1,7 +1,7 @@
 -- +goose Up
 -- +goose StatementBegin
 CREATE TABLE IF NOT EXISTS employees (
-    employee_id UUID PRIMARY KEY,
+    employee_id TEXT PRIMARY KEY,
     username TEXT NOT NULL DEFAULT '',
     icon TEXT NOT NULL DEFAULT '',
     email TEXT NOT NULL DEFAULT ''
