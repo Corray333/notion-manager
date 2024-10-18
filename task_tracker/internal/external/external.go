@@ -461,7 +461,8 @@ func (e *External) WriteOfTime(timeToWriteOf *entities.TimeMsg) error {
 		"Исполнитель": map[string]interface{}{
 			"people": []map[string]interface{}{
 				{
-					"id": timeToWriteOf.EmployeeID,
+					"object": "user",
+					"id":     timeToWriteOf.EmployeeID,
 				},
 			},
 		},
