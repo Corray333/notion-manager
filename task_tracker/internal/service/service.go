@@ -171,6 +171,7 @@ func (s *Service) Actualize() (updated bool, err error) {
 			return false, err
 		}
 	}
+	fmt.Println("Times last update: ", timesLastUpdate)
 
 	fmt.Println("Getting employees")
 	employees, employeesLastUpdate, err := s.external.GetEmployees(system.EmployeeDBLastSynced)

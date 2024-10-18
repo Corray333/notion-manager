@@ -145,7 +145,7 @@ func (e *External) GetTimes(lastSynced int64, startCursor string) (times []entit
 		},
 		"sorts": []map[string]interface{}{
 			{
-				"timestamp": "created_time",
+				"timestamp": "last_edited_time",
 				"direction": "ascending",
 			},
 		},
@@ -201,6 +201,8 @@ func (e *External) GetTimes(lastSynced int64, startCursor string) (times []entit
 
 		lastUpdate = lastEditedTime.Unix()
 	}
+
+	fmt.Println(lastUpdate)
 
 	if timeResults.HasMore {
 		fmt.Println("time has more")

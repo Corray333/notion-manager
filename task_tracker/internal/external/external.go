@@ -249,7 +249,7 @@ func (e *External) GetTasks(lastSynced int64, startCursor string) (tasks []entit
 		},
 		"sorts": []map[string]interface{}{
 			{
-				"timestamp": "created_time",
+				"timestamp": "last_edited_time",
 				"direction": "ascending",
 			},
 		},
@@ -316,6 +316,8 @@ func (e *External) GetTasks(lastSynced int64, startCursor string) (tasks []entit
 
 		lastUpdate = lastEditedTime.Unix()
 	}
+
+	fmt.Println(lastUpdate)
 
 	if task.HasMore {
 		fmt.Println("has more")
