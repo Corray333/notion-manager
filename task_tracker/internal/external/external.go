@@ -458,6 +458,13 @@ func (e *External) WriteOfTime(timeToWriteOf *entities.TimeMsg) error {
 				"start": time.Now().Format(notion.TIME_LAYOUT),
 			},
 		},
+		"Исполнитель": map[string]interface{}{
+			"people": []map[string]interface{}{
+				{
+					"id": timeToWriteOf.EmployeeID,
+				},
+			},
+		},
 	}
 
 	fmt.Println(os.Getenv("TIMES_DB"))
