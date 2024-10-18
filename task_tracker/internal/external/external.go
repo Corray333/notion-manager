@@ -460,6 +460,7 @@ func (e *External) WriteOfTime(timeToWriteOf *entities.TimeMsg) error {
 		},
 	}
 
+	fmt.Println(os.Getenv("TIMES_DB"))
 	_, err := notion.CreatePage(os.Getenv("TIMES_DB"), req, "")
 	if err != nil {
 		slog.Error("error creating time page in notion: " + err.Error())
