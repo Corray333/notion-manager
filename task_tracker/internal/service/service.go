@@ -109,7 +109,7 @@ func (s *Service) StartUpdatingWorker() {
 	for {
 		_, err := s.Actualize()
 		if err != nil {
-			panic(err)
+			slog.Error(err.Error())
 		}
 		time.Sleep(time.Minute)
 	}
