@@ -210,8 +210,12 @@ func (s *Service) Actualize() (updated bool, err error) {
 
 	system.EmployeeDBLastSynced = employeesLastUpdate
 	system.ProjectsDBLastSynced = projectsLastUpdate
-	system.TasksDBLastSynced = tasksLastUpdate
-	system.TimesDBLastSynced = timesLastUpdate
+	if tasksLastUpdate > 0 {
+		system.TasksDBLastSynced = tasksLastUpdate
+	}
+	if timesLastUpdate > 0 {
+		system.TimesDBLastSynced = timesLastUpdate
+	}
 
 	if err := s.repo.SetSystemInfo(system); err != nil {
 		return false, err

@@ -8,7 +8,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// const ManagerID = 737415136
+const DeveloperID = 737415136
 const ManagerID = 377742748
 
 func (e *External) SendNotification(rows []entities.Row) error {
@@ -23,5 +23,12 @@ func (e *External) SendNotification(rows []entities.Row) error {
 	if _, err := e.tg.GetBot().Send(msg); err != nil {
 		return err
 	}
+
+	msg = tgbotapi.NewMessage(DeveloperID, msgText)
+	msg.ParseMode = tgbotapi.ModeHTML
+	if _, err := e.tg.GetBot().Send(msg); err != nil {
+		return err
+	}
+
 	return nil
 }
