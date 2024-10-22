@@ -154,12 +154,8 @@ func (e *External) GetEmployees(lastSynced int64) (employees []entities.Employee
 				return w.Properties.Name.Title[0].PlainText
 			}(),
 			Icon: func() string {
-				if w.Icon.Type == "emoji" {
-					return w.Icon.Emoji.Emoji
-				} else if w.Icon.Type == "external" {
-					return w.Icon.External.Url
-				} else if w.Icon.Type == "file" {
-					return w.Icon.File.Url
+				if len(w.Properties.Link.People) > 0 {
+					return w.Properties.Link.People[0].AvatarURL
 				}
 				return ""
 			}(),
