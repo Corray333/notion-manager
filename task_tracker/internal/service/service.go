@@ -65,7 +65,7 @@ func (s *Service) Run() {
 	go s.StartUpdatingWorker()
 	go s.StartOutboxWorker()
 
-	s.cron.Every(1).Day().At("20:00").Do(s.CheckInvalid)
+	s.cron.Every(1).Day().At("10:00").Do(s.CheckInvalid)
 	s.cron.StartBlocking()
 }
 
