@@ -72,9 +72,18 @@ func (s *Service) Run() {
 func (s *Service) CheckInvalid() {
 	rows, err := s.repo.GetInvalidRows()
 	if err != nil {
-		slog.Error("error getting times: " + err.Error())
+		slog.Error("error getting rows: " + err.Error())
 		return
 	}
+
+	fmt.Println("Getting times")
+	times, _, err := s.external.GetTimes(0, "")
+	if err != nil {
+		slog.Error("error getting times: " + err.Error())
+	}
+
+	invalidTimes := s.ValidateTimes(times)
+	rows = append(rows, invalidTimes...)
 
 	grouped := s.groupByEmployeeID(rows)
 	for _, rows := range grouped {
@@ -158,23 +167,15 @@ func (s *Service) Actualize() (updated bool, err error) {
 		return false, err
 	}
 
-	fmt.Println("Getting times")
-	times, timesLastUpdate, err := s.external.GetTimes(system.TimesDBLastSynced, "")
-	if err != nil {
-		return false, err
-	}
-
-	invalidTimes := s.ValidateTimes(times)
-
-	if len(invalidTimes) > 0 {
-		if err := s.repo.SetInvalidRows(invalidTimes); err != nil {
-			return false, err
-		}
-	}
-	fmt.Println("Times last update: ", timesLastUpdate)
+	// fmt.Println("Getting times")
+	// times, timesLastUpdate, err := s.external.GetTimes(system.TimesDBLastSynced, "")
+	// if err != nil {
+	// 	return false, err
+	// }
+	// fmt.Println("Times last update: ", timesLastUpdate)
 
 	fmt.Println("Getting employees")
-	employees, employeesLastUpdate, err := s.external.GetEmployees(system.EmployeeDBLastSynced)
+	employees, _, err := s.external.GetEmployees(system.EmployeeDBLastSynced)
 	if err != nil {
 		return false, err
 	}
@@ -208,14 +209,14 @@ func (s *Service) Actualize() (updated bool, err error) {
 		return false, err
 	}
 
-	system.EmployeeDBLastSynced = employeesLastUpdate
+	system.EmployeeDBLastSynced = 0
 	system.ProjectsDBLastSynced = projectsLastUpdate
 	if tasksLastUpdate > 0 {
 		system.TasksDBLastSynced = tasksLastUpdate
 	}
-	if timesLastUpdate > 0 {
-		system.TimesDBLastSynced = timesLastUpdate
-	}
+	// if timesLastUpdate > 0 {
+	// 	system.TimesDBLastSynced = timesLastUpdate
+	// }
 
 	if err := s.repo.SetSystemInfo(system); err != nil {
 		return false, err

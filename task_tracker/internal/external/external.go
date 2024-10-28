@@ -344,6 +344,11 @@ type Project struct {
 				PlainText string `json:"plain_text"`
 			} `json:"title"`
 		} `json:"Name"`
+		Status struct {
+			Status struct {
+				Name string `json:"name"`
+			} `json:"status"`
+		} `json:"Статус"`
 		Internal struct {
 			Relation []struct {
 				ID string `json:"id"`
@@ -412,6 +417,7 @@ func (e *External) GetProjects(lastSynced int64) (projects []entities.Project, l
 				return ""
 			}(),
 			IconType: w.Icon.Type,
+			Status:   w.Properties.Status.Status.Name,
 		})
 
 		lastEditedTime, err := time.Parse(notion.TIME_LAYOUT_IN, w.LastEditedTime)
