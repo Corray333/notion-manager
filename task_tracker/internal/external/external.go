@@ -297,8 +297,6 @@ func (e *External) GetTasks(lastSynced int64, startCursor string, useTitleFilter
 		lastUpdate = lastEditedTime.Unix()
 	}
 
-	fmt.Println(string(resp))
-
 	if task.HasMore {
 		fmt.Println("has more")
 		nextTasks, lastEditedTime, err := e.GetTasks(lastSynced, task.NextCursor, useTitleFilter)
@@ -502,7 +500,6 @@ func (e *External) WriteOfTime(timeToWriteOf *entities.TimeMsg) error {
 		},
 	}
 
-	fmt.Println(os.Getenv("TIMES_DB"))
 	_, err := notion.CreatePage(os.Getenv("TIMES_DB"), req, "")
 	if err != nil {
 		slog.Error("error creating time page in notion: " + err.Error())

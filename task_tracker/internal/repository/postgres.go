@@ -115,7 +115,7 @@ func (s *Storage) SetProjects(projects []entities.Project) error {
 	defer tx.Rollback()
 
 	for _, project := range projects {
-		_, err := tx.Exec("INSERT INTO projects (project_id, name, icon, icon_type) VALUES ($1, $2, $3, $4) ON CONFLICT (project_id) DO UPDATE SET name = $2, icon = $3, icon_type = $4", project.ID, project.Name, project.Icon, project.IconType)
+		_, err := tx.Exec("INSERT INTO projects (project_id, name, icon, icon_type, status) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (project_id) DO UPDATE SET name = $2, icon = $3, icon_type = $4, status = $5", project.ID, project.Name, project.Icon, project.IconType, project.Status)
 		if err != nil {
 			slog.Error("error setting projects: " + err.Error())
 			return err
