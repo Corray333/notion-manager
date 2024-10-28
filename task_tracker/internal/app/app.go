@@ -19,6 +19,7 @@ func New() *app {
 	storage := repository.New()
 	external := external.New()
 	service := service.New(storage, external)
+
 	transport := transport.New(service)
 	transport.RegisterRoutes()
 

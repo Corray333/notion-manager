@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -24,7 +25,7 @@ const (
 )
 
 func GetHTTPClient() *http.Client {
-	proxyURL, _ := url.Parse("http://uLQaWYgF:HTPiw5k5@136.0.78.192:64648")
+	proxyURL, _ := url.Parse("http://uLQaWYgF:HTPiw5k5@185.100.158.155:62948")
 
 	transport := &http.Transport{
 		Proxy: http.ProxyURL(proxyURL),
@@ -64,11 +65,13 @@ func SearchPages(dbid string, filter map[string]interface{}) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
+	fmt.Println("popan")
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
+		slog.Error("notion error while searching pages: " + string(body))
 		return nil, fmt.Errorf("notion error %s while searching pages with body %s", string(body), string(data))
 	}
 

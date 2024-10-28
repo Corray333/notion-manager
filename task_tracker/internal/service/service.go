@@ -35,9 +35,9 @@ type repository interface {
 
 type external interface {
 	GetEmployees(lastSynced int64) (employees []entities.Employee, lastUpdate int64, err error)
-	GetTasks(lastSynced int64, startCursor string) (tasks []entities.Task, lastUpdate int64, err error)
+	GetTasks(lastSynced int64, startCursor string, useTitleFilter bool) (tasks []entities.Task, lastUpdate int64, err error)
 	GetProjects(lastSynced int64) (projects []entities.Project, lastUpdate int64, err error)
-	GetTimes(lastSynced int64, startCursor string) (times []entities.Time, lastUpdate int64, err error)
+	GetTimes(lastSynced int64, startCursor string, useWhatDidFilter bool) (times []entities.Time, lastUpdate int64, err error)
 
 	WriteOfTime(time *entities.TimeMsg) error
 
@@ -70,22 +70,28 @@ func (s *Service) Run() {
 }
 
 func (s *Service) CheckInvalid() {
-	rows, err := s.repo.GetInvalidRows()
+	tasks, _, err := s.external.GetTasks(0, "", true)
 	if err != nil {
-		slog.Error("error getting rows: " + err.Error())
-		return
+		slog.Error("error getting tasks: " + err.Error())
+	}
+
+	invalid := s.ValidateTasks(tasks)
+	if len(invalid) > 0 {
+		if err := s.repo.SetInvalidRows(invalid); err != nil {
+			slog.Error("error setting invalid rows: " + err.Error())
+		}
 	}
 
 	fmt.Println("Getting times")
-	times, _, err := s.external.GetTimes(0, "")
+	times, _, err := s.external.GetTimes(0, "", true)
 	if err != nil {
 		slog.Error("error getting times: " + err.Error())
 	}
 
 	invalidTimes := s.ValidateTimes(times)
-	rows = append(rows, invalidTimes...)
+	invalid = append(invalid, invalidTimes...)
 
-	grouped := s.groupByEmployeeID(rows)
+	grouped := s.groupByEmployeeID(invalid)
 	for _, rows := range grouped {
 		if err := s.external.SendNotification(rows); err != nil {
 			slog.Error("error sending notification: " + err.Error())
@@ -193,17 +199,17 @@ func (s *Service) Actualize() (updated bool, err error) {
 	}
 
 	fmt.Println("Getting tasks")
-	tasks, tasksLastUpdate, err := s.external.GetTasks(system.TasksDBLastSynced, "")
+	tasks, tasksLastUpdate, err := s.external.GetTasks(system.TasksDBLastSynced, "", false)
 	if err != nil {
 		return false, err
 	}
 
-	invalidTasks := s.ValidateTasks(tasks)
-	if len(invalidTasks) > 0 {
-		if err := s.repo.SetInvalidRows(invalidTasks); err != nil {
-			return false, err
-		}
-	}
+	// invalidTasks := s.ValidateTasks(tasks)
+	// if len(invalidTasks) > 0 {
+	// 	if err := s.repo.SetInvalidRows(invalidTasks); err != nil {
+	// 		return false, err
+	// 	}
+	// }
 
 	if err := s.repo.SetTasks(tasks); err != nil {
 		return false, err

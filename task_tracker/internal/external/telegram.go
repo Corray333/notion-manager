@@ -8,9 +8,6 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-const DeveloperID = 737415136
-const ManagerID = 377742748
-
 var Subscribers = []int64{737415136, 377742748, 56218566}
 
 func (e *External) SendNotification(rows []entities.Row) error {
