@@ -69,8 +69,10 @@ func (s *Service) Run() {
 	s.cron.StartBlocking()
 }
 
+const CheckAfter = 1727740840
+
 func (s *Service) CheckInvalid() {
-	tasks, _, err := s.external.GetTasks(0, "", true)
+	tasks, _, err := s.external.GetTasks(CheckAfter, "", true)
 	if err != nil {
 		slog.Error("error getting tasks: " + err.Error())
 	}
@@ -83,7 +85,7 @@ func (s *Service) CheckInvalid() {
 	}
 
 	fmt.Println("Getting times")
-	times, _, err := s.external.GetTimes(0, "", true)
+	times, _, err := s.external.GetTimes(CheckAfter, "", true)
 	if err != nil {
 		slog.Error("error getting times: " + err.Error())
 	}

@@ -244,7 +244,6 @@ func (e *External) GetTasks(lastSynced int64, startCursor string, useTitleFilter
 	if err != nil {
 		return nil, 0, err
 	}
-	fmt.Println("jopa")
 	task := struct {
 		Results    []Task `json:"results"`
 		HasMore    bool   `json:"has_more"`

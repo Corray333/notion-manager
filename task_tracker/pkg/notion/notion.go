@@ -65,7 +65,6 @@ func SearchPages(dbid string, filter map[string]interface{}) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	fmt.Println("popan")
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
