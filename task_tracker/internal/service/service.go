@@ -35,9 +35,9 @@ type repository interface {
 
 type external interface {
 	GetEmployees(lastSynced int64) (employees []entities.Employee, lastUpdate int64, err error)
-	GetTasks(lastSynced int64, startCursor string, useTitleFilter bool) (tasks []entities.Task, lastUpdate int64, err error)
+	GetTasks(timeFilterType string, lastSynced int64, startCursor string, useTitleFilter bool) (tasks []entities.Task, lastUpdate int64, err error)
 	GetProjects(lastSynced int64) (projects []entities.Project, lastUpdate int64, err error)
-	GetTimes(lastSynced int64, startCursor string, useWhatDidFilter bool) (times []entities.Time, lastUpdate int64, err error)
+	GetTimes(timeFilterType string, lastSynced int64, startCursor string, useWhatDidFilter bool) (times []entities.Time, lastUpdate int64, err error)
 
 	WriteOfTime(time *entities.TimeMsg) error
 
@@ -72,7 +72,7 @@ func (s *Service) Run() {
 const CheckAfter = 1727740840
 
 func (s *Service) CheckInvalid() {
-	tasks, _, err := s.external.GetTasks(CheckAfter, "", true)
+	tasks, _, err := s.external.GetTasks("created_time", CheckAfter, "", true)
 	if err != nil {
 		slog.Error("error getting tasks: " + err.Error())
 	}
@@ -85,7 +85,7 @@ func (s *Service) CheckInvalid() {
 	}
 
 	fmt.Println("Getting times")
-	times, _, err := s.external.GetTimes(CheckAfter, "", true)
+	times, _, err := s.external.GetTimes("created_time", CheckAfter, "", true)
 	if err != nil {
 		slog.Error("error getting times: " + err.Error())
 	}
@@ -201,7 +201,7 @@ func (s *Service) Actualize() (updated bool, err error) {
 	}
 
 	fmt.Println("Getting tasks")
-	tasks, tasksLastUpdate, err := s.external.GetTasks(system.TasksDBLastSynced, "", false)
+	tasks, tasksLastUpdate, err := s.external.GetTasks("last_edited_time", system.TasksDBLastSynced, "", false)
 	if err != nil {
 		return false, err
 	}

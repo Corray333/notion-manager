@@ -236,8 +236,8 @@ type Task struct {
 	} `json:"properties"`
 }
 
-func (e *External) GetTasks(lastSynced int64, startCursor string, useTitleFilter bool) (tasks []entities.Task, lastUpdate int64, err error) {
-	filter := buildFilter(lastSynced, startCursor, useTitleFilter)
+func (e *External) GetTasks(timeFilterType string, lastSynced int64, startCursor string, useTitleFilter bool) (tasks []entities.Task, lastUpdate int64, err error) {
+	filter := buildFilter(timeFilterType, lastSynced, startCursor, useTitleFilter)
 
 	lastUpdate = 0
 	resp, err := notion.SearchPages(os.Getenv("TASKS_DB"), filter)
@@ -298,7 +298,7 @@ func (e *External) GetTasks(lastSynced int64, startCursor string, useTitleFilter
 
 	if task.HasMore {
 		fmt.Println("has more")
-		nextTasks, lastEditedTime, err := e.GetTasks(lastSynced, task.NextCursor, useTitleFilter)
+		nextTasks, lastEditedTime, err := e.GetTasks(timeFilterType, lastSynced, task.NextCursor, useTitleFilter)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -309,7 +309,7 @@ func (e *External) GetTasks(lastSynced int64, startCursor string, useTitleFilter
 	return tasks, lastUpdate, nil
 }
 
-func buildFilter(lastSynced int64, startCursor string, useTitleFilter bool) map[string]interface{} {
+func buildFilter(timeFilterType string, lastSynced int64, startCursor string, useTitleFilter bool) map[string]interface{} {
 	filter := map[string]interface{}{
 		"filter": map[string]interface{}{
 			"timestamp": "last_edited_time",
@@ -319,7 +319,7 @@ func buildFilter(lastSynced int64, startCursor string, useTitleFilter bool) map[
 		},
 		"sorts": []map[string]interface{}{
 			{
-				"timestamp": "last_edited_time",
+				"timestamp": timeFilterType,
 				"direction": "ascending",
 			},
 		},
@@ -631,8 +631,8 @@ type Time struct {
 	URL string `json:"url"`
 }
 
-func (e *External) GetTimes(lastSynced int64, startCursor string, useWhatDidFilter bool) (times []entities.Time, lastUpdate int64, err error) {
-	filter := buildTimeFilter(lastSynced, startCursor, useWhatDidFilter)
+func (e *External) GetTimes(timeFilterType string, lastSynced int64, startCursor string, useWhatDidFilter bool) (times []entities.Time, lastUpdate int64, err error) {
+	filter := buildTimeFilter(timeFilterType, lastSynced, startCursor, useWhatDidFilter)
 
 	lastUpdate = 0
 
@@ -684,7 +684,7 @@ func (e *External) GetTimes(lastSynced int64, startCursor string, useWhatDidFilt
 
 	if timeResults.HasMore {
 		fmt.Println("time has more")
-		nextTasks, lastEditedTime, err := e.GetTimes(lastSynced, timeResults.NextCursor, useWhatDidFilter)
+		nextTasks, lastEditedTime, err := e.GetTimes(timeFilterType, lastSynced, timeResults.NextCursor, useWhatDidFilter)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -695,7 +695,7 @@ func (e *External) GetTimes(lastSynced int64, startCursor string, useWhatDidFilt
 	return times, lastUpdate, nil
 }
 
-func buildTimeFilter(lastSynced int64, startCursor string, useWhatDidFilter bool) map[string]interface{} {
+func buildTimeFilter(timeFilterType string, lastSynced int64, startCursor string, useWhatDidFilter bool) map[string]interface{} {
 	filter := map[string]interface{}{
 		"filter": map[string]interface{}{
 			"timestamp": "last_edited_time",
@@ -705,7 +705,7 @@ func buildTimeFilter(lastSynced int64, startCursor string, useWhatDidFilter bool
 		},
 		"sorts": []map[string]interface{}{
 			{
-				"timestamp": "last_edited_time",
+				"timestamp": timeFilterType,
 				"direction": "ascending",
 			},
 		},
