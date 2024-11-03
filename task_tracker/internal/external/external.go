@@ -312,14 +312,14 @@ func (e *External) GetTasks(timeFilterType string, lastSynced int64, startCursor
 func buildFilter(timeFilterType string, lastSynced int64, startCursor string, useTitleFilter bool) map[string]interface{} {
 	filter := map[string]interface{}{
 		"filter": map[string]interface{}{
-			"timestamp": "last_edited_time",
-			"last_edited_time": map[string]interface{}{
+			"timestamp": timeFilterType,
+			timeFilterType: map[string]interface{}{
 				"after": time.Unix(lastSynced, 0).Format(notion.TIME_LAYOUT),
 			},
 		},
 		"sorts": []map[string]interface{}{
 			{
-				"timestamp": timeFilterType,
+				"timestamp": "last_edited_time",
 				"direction": "ascending",
 			},
 		},
@@ -698,14 +698,14 @@ func (e *External) GetTimes(timeFilterType string, lastSynced int64, startCursor
 func buildTimeFilter(timeFilterType string, lastSynced int64, startCursor string, useWhatDidFilter bool) map[string]interface{} {
 	filter := map[string]interface{}{
 		"filter": map[string]interface{}{
-			"timestamp": "last_edited_time",
-			"last_edited_time": map[string]interface{}{
+			"timestamp": timeFilterType,
+			timeFilterType: map[string]interface{}{
 				"after": time.Unix(lastSynced, 0).Format(notion.TIME_LAYOUT),
 			},
 		},
 		"sorts": []map[string]interface{}{
 			{
-				"timestamp": timeFilterType,
+				"timestamp": "last_edited_time",
 				"direction": "ascending",
 			},
 		},

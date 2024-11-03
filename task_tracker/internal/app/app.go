@@ -20,6 +20,8 @@ func New() *app {
 	external := external.New()
 	service := service.New(storage, external)
 
+	service.CheckInvalid()
+
 	transport := transport.New(service)
 	transport.RegisterRoutes()
 
