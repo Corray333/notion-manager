@@ -96,7 +96,7 @@ func (s *Storage) SetTasks(tasks []entities.Task) error {
 	defer tx.Rollback()
 
 	for _, task := range tasks {
-		_, err := tx.Exec("INSERT INTO tasks (task_id, project_id, employee_id, title, status) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (task_id) DO UPDATE SET title = $4, status = $5", task.ID, task.ProjectID, task.EmployeeID, task.Title, task.Status)
+		_, err := tx.Exec("INSERT INTO tasks (task_id, project_id, employee_id, title, status) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (task_id) DO UPDATE SET title = $4, status = $5, employee_id = $3, project_id = $2", task.ID, task.ProjectID, task.EmployeeID, task.Title, task.Status)
 		if err != nil {
 			slog.Error("error setting tasks: " + err.Error())
 			return err

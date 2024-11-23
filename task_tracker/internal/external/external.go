@@ -306,6 +306,8 @@ func (e *External) GetTasks(timeFilterType string, lastSynced int64, startCursor
 		tasks = append(tasks, nextTasks...)
 	}
 
+	fmt.Println("Tasks: ", tasks)
+
 	return tasks, lastUpdate, nil
 }
 
