@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -465,7 +466,7 @@ func (e *External) WriteOfTime(timeToWriteOf *entities.TimeMsg) error {
 
 	req := map[string]interface{}{
 		"Всего ч": map[string]interface{}{
-			"number": float64(timeToWriteOf.Duration) / 60 / 60,
+			"number": math.Ceil((float64(timeToWriteOf.Duration)/60/60)/0.15) * 0.15,
 		},
 		"Задача": map[string]interface{}{
 			"relation": []map[string]interface{}{
