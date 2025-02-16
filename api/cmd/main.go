@@ -14,7 +14,14 @@ func main() {
 
 	config.MustInit()
 
-	go gsheets.UpdateGoogleSheets()
+	// projectName, tasks, err := mindmap.ParseMarkdownTasks("Хронодокс.md")
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	// notion.CreateMindmapTasks(projectName, tasks)
+
+	// go gsheets.UpdateGoogleSheets()
 
 	c := cron.New(cron.WithLocation(time.FixedZone("MSK", 3*60*60)))
 
