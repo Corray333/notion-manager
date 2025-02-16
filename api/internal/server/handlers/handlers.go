@@ -4,10 +4,12 @@ package handlers
 
 import (
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 
 	"github.com/Corray333/notion-manager/internal/gsheets"
+	"github.com/Corray333/notion-manager/internal/mindmap"
 	"github.com/Corray333/notion-manager/internal/notion"
 	"github.com/Corray333/notion-manager/internal/project"
 )
@@ -125,4 +127,34 @@ func UpdateGoogleSheets(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 
+}
+
+func ParseMindmap(w http.ResponseWriter, r *http.Request) {
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		slog.Error(err.Error())
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		slog.Error(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	projectName, tasks, err := mindmap.ParseMarkdownTasks(string(data))
+	if err != nil {
+		slog.Error(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if err := notion.CreateMindmapTasks(projectName, tasks); err != nil {
+		slog.Error(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }

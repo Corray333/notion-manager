@@ -7,6 +7,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./api:/app
+      - .env:/app/.env
     command: make run
 
   task_tracker:

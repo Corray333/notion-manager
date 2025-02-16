@@ -44,11 +44,11 @@ h1,h2,h3{
 }
 
 @layer components{
-  button{
-    @apply border-2 w-full px-6 py-3 rounded-md border-dark;
+  button, .btn-type-1{
+    @apply border-2 w-full text-center flex justify-center items-center px-6 py-3 rounded-md border-dark;
     transition: all 0.3s ease-in-out;
   }
-  button:hover{
+  button:hover, .btn-type-1:hover{
     box-shadow: 0.2rem 0.2rem 0rem 0rem rgb(0, 0, 0); 
     background-color: var(--accent);
     color: white;

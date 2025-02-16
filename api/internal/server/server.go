@@ -31,7 +31,7 @@ func (a *App) Run() {
 
 	// TODO: get allowed origins, headers and methods from cfg
 	router.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{"http://*", "https://*"},
+		AllowedOrigins:   []string{"http://*", "https://*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "Set-Cookie", "Refresh", "X-CSRF-Token"},
 		AllowCredentials: true,
@@ -44,6 +44,7 @@ func (a *App) Run() {
 	router.Patch("/api/sync", handlers.UpdateDatabases(store))
 	router.Patch("/api/sheets", handlers.UpdateGoogleSheets)
 	router.Get("/api/fix", handlers.GetToBeUpdated(store))
+	router.Post("/api/mindmap", handlers.ParseMindmap)
 
 	// Swagger
 	router.Get("/api/swagger/*", httpSwagger.WrapHandler)

@@ -24,6 +24,8 @@ onBeforeMount(() => {
   } else {
     console.log("Telegram Web App SDK не доступен.");
   }
+
+  authorized.value = true
 })
 
 const alerts = ref([])
@@ -79,6 +81,44 @@ const syncGSheets = async () => {
     alerts.value = alerts.value.filter(alert => alert.id !== id)
   }, 3000)
 }
+
+const handleFileUpload = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+    await axios.post(`${import.meta.env.VITE_API_URL}/mindmap`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+
+    const id = Date.now()
+    alerts.value.push({
+      id,
+      text: "Файл загружен",
+      color: "success"
+    })
+    setTimeout(() => {
+      alerts.value = alerts.value.filter(alert => alert.id !== id)
+    }, 3000)
+  } catch (error) {
+    console.error(error);
+    const id = Date.now()
+    alerts.value.push({
+      id,
+      text: "Не удалось загрузить файл",
+      color: "error"
+    })
+    setTimeout(() => {
+      alerts.value = alerts.value.filter(alert => alert.id !== id)
+    }, 3000)
+  }
+};
+
 </script>
 
 <template>
@@ -100,6 +140,22 @@ const syncGSheets = async () => {
         <Icon v-if="sheetsWaiting" class=" text-2xl" icon="eos-icons:three-dots-loading" />
         <p v-else>Синхронизировать Sheets</p>
       </button>
+
+      <div class="flex w-full items-center justify-center">
+    <label
+      for="file-upload"
+      class="btn-type-1"
+    >
+      Загрузить майндкарту
+    </label>
+    <input
+      id="file-upload"
+      type="file"
+      accept="text/markdown"
+      class="hidden"
+      @change="handleFileUpload"
+    />
+  </div>
     </section>
   </section>
 </template>
