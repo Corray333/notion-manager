@@ -64,6 +64,7 @@ type Employee struct {
 	Username string `json:"username" db:"username" example:"Mark"`
 	Icon     string `json:"icon" db:"icon" example:"https://prod-files-secure.s3.us-west-2.amazonaws.com/9a2e0635-b9d4-4178-a529-cf6b3bdce29d/f2f425d1-efde-46ee-a724-78dcd401bff0/Frame_3.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAT73L2G45HZZMZUHI%2F20241014%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20241014T062630Z&X-Amz-Expires=3600&X-Amz-Signature=195ddfb2599f4d4e6162d1e467966af275d2bad346414fdb574f61049757e40f&X-Amz-SignedHeaders=host&x-id=GetObject"`
 	Email    string `json:"email" db:"email" example:"s0177180@edu.kubsu.ru"`
+	Profile  string `json:"profile" db:"profile"`
 }
 
 type System struct {

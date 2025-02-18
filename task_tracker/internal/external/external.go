@@ -167,6 +167,7 @@ func (e *External) GetEmployees(lastSynced int64) (employees []entities.Employee
 				}
 				return w.Properties.Link.People[0].Person.Email
 			}(),
+			Profile: w.ID,
 		})
 
 		lastEditedTime, err := time.Parse(notion.TIME_LAYOUT_IN, w.LastEditedTime)
@@ -310,6 +311,102 @@ func (e *External) GetTasks(timeFilterType string, lastSynced int64, startCursor
 	fmt.Println("Tasks: ", tasks)
 
 	return tasks, lastUpdate, nil
+}
+
+func (e *External) GetNotCorrectPersonTimes() (times []entities.Time, lastUpdate int64, err error) {
+	filter := map[string]interface{}{
+		"filter": map[string]interface{}{
+			"property": "PC-B",
+			"formula": map[string]interface{}{
+				"checkbox": map[string]interface{}{
+					"equals": false,
+				},
+			},
+		},
+		"sorts": []map[string]interface{}{
+			{
+				"timestamp": "last_edited_time",
+				"direction": "ascending",
+			},
+		},
+	}
+
+	resp, err := notion.SearchPages(os.Getenv("TIMES_DB"), filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	timeResults := struct {
+		Results    []Time `json:"results"`
+		HasMore    bool   `json:"has_more"`
+		NextCursor string `json:"next_cursor"`
+	}{}
+	if err := json.Unmarshal(resp, &timeResults); err != nil {
+		return nil, 0, err
+	}
+
+	times = []entities.Time{}
+	for _, w := range timeResults.Results {
+		times = append(times, entities.Time{
+			Description: func() string {
+				if len(w.Properties.WhatDid.Title) == 0 {
+					return ""
+				}
+
+				return w.Properties.WhatDid.Title[0].PlainText
+			}(),
+			ID: strings.ReplaceAll(w.ID, "-", ""),
+			Employee: func() string {
+				if len(w.Properties.WhoDid.People) == 0 {
+					return ""
+				}
+				return w.Properties.WhoDid.People[0].Name
+			}(),
+			EmployeeID: func() string {
+				if len(w.Properties.WhoDid.People) == 0 {
+					return ""
+				}
+				return w.Properties.WhoDid.People[0].ID
+			}(),
+		})
+
+		lastEditedTime, err := time.Parse(notion.TIME_LAYOUT_IN, w.LastEditedTime)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		lastUpdate = lastEditedTime.Unix()
+	}
+
+	if timeResults.HasMore {
+		fmt.Println("time has more")
+		nextTasks, lastEditedTime, err := e.GetNotCorrectPersonTimes(lastSynced)
+		if err != nil {
+			return nil, 0, err
+		}
+		lastUpdate = lastEditedTime
+		times = append(times, nextTasks...)
+	}
+
+	return times, lastUpdate, nil
+}
+
+func (e *External) SetProfileInTime(timeID, profileID string) error {
+	req := map[string]interface{}{
+		"People": map[string]interface{}{
+			"relation": []map[string]interface{}{
+				{
+					"id": profileID,
+				},
+			},
+		},
+	}
+
+	_, err := notion.UpdatePage(timeID, req)
+	if err != nil {
+		slog.Error("error updating time page in notion: " + err.Error())
+		return err
+	}
+	return nil
 }
 
 func buildFilter(timeFilterType string, lastSynced int64, startCursor string, useTitleFilter bool) map[string]interface{} {

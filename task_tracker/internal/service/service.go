@@ -42,6 +42,9 @@ type external interface {
 	WriteOfTime(time *entities.TimeMsg) error
 
 	SendNotification(msg []entities.Row) error
+
+	GetNotCorrectPersonTimes() (times []entities.Time, lastUpdate int64, err error)
+	SetProfileInTime(timeID, profileID string) error
 }
 
 type Service struct {
@@ -200,18 +203,20 @@ func (s *Service) Actualize() (updated bool, err error) {
 		return false, err
 	}
 
+	fmt.Println("Getting not correct person times")
+	times, _, err := s.external.GetNotCorrectPersonTimes()
+	if err != nil {
+		return false, err
+	}
+	if err := s.SetProfileInTimes(times); err != nil {
+		return false, err
+	}
+
 	fmt.Println("Getting tasks")
 	tasks, tasksLastUpdate, err := s.external.GetTasks("last_edited_time", system.TasksDBLastSynced, "", false)
 	if err != nil {
 		return false, err
 	}
-
-	// invalidTasks := s.ValidateTasks(tasks)
-	// if len(invalidTasks) > 0 {
-	// 	if err := s.repo.SetInvalidRows(invalidTasks); err != nil {
-	// 		return false, err
-	// 	}
-	// }
 
 	if err := s.repo.SetTasks(tasks); err != nil {
 		return false, err
@@ -222,15 +227,25 @@ func (s *Service) Actualize() (updated bool, err error) {
 	if tasksLastUpdate > 0 {
 		system.TasksDBLastSynced = tasksLastUpdate
 	}
-	// if timesLastUpdate > 0 {
-	// 	system.TimesDBLastSynced = timesLastUpdate
-	// }
 
 	if err := s.repo.SetSystemInfo(system); err != nil {
 		return false, err
 	}
 
 	return len(employees) > 0 || len(projects) > 0 || len(tasks) > 0, nil
+}
+
+func (s *Service) SetProfileInTimes(times []entities.Time) error {
+	for _, time := range times {
+		employee, err := s.repo.GetEmployeeByID(time.EmployeeID)
+		if err != nil {
+			return err
+		}
+		if err := s.external.SetProfileInTime(time.ID, employee.Profile); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) WriteOfTime(time *entities.TimeMsg) error {

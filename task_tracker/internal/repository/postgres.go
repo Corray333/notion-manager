@@ -76,7 +76,7 @@ func (s *Storage) SetEmployees(employees []entities.Employee) error {
 	defer tx.Rollback()
 
 	for _, employee := range employees {
-		_, err := tx.Exec("INSERT INTO employees (employee_id, username, email, icon) VALUES ($1, $2, $3, $4) ON CONFLICT (employee_id) DO UPDATE SET username = $2, email = $3, icon = $4", employee.ID, employee.Username, employee.Email, employee.Icon)
+		_, err := tx.Exec("INSERT INTO employees (employee_id, username, email, icon, profile) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (employee_id) DO UPDATE SET username = $2, email = $3, icon = $4, profile = $5", employee.ID, employee.Username, employee.Email, employee.Icon, employee.Profile)
 		if err != nil {
 			slog.Error("error setting employees: " + err.Error())
 			return err
