@@ -392,7 +392,7 @@ func (e *External) GetNotCorrectPersonTimes() (times []entities.Time, lastUpdate
 
 func (e *External) SetProfileInTime(timeID, profileID string) error {
 	req := map[string]interface{}{
-		"People": map[string]interface{}{
+		"Person": map[string]interface{}{
 			"relation": []map[string]interface{}{
 				{
 					"id": profileID,

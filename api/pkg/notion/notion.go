@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 )
 
@@ -25,11 +24,8 @@ const (
 )
 
 func GetHTTPClient() *http.Client {
-	proxyURL, _ := url.Parse("http://uLQaWYgF:HTPiw5k5@154.195.127.136:64840")
 
-	transport := &http.Transport{
-		Proxy: http.ProxyURL(proxyURL),
-	}
+	transport := &http.Transport{}
 
 	return &http.Client{
 		Transport: transport,
