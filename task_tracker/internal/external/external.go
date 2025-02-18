@@ -377,16 +377,6 @@ func (e *External) GetNotCorrectPersonTimes() (times []entities.Time, lastUpdate
 		lastUpdate = lastEditedTime.Unix()
 	}
 
-	if timeResults.HasMore {
-		fmt.Println("time has more")
-		nextTasks, lastEditedTime, err := e.GetNotCorrectPersonTimes()
-		if err != nil {
-			return nil, 0, err
-		}
-		lastUpdate = lastEditedTime
-		times = append(times, nextTasks...)
-	}
-
 	return times, lastUpdate, nil
 }
 
