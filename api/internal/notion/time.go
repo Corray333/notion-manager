@@ -226,7 +226,7 @@ func GetTimes(lastSynced int64, projectID string, cursor string) ([]Time, error)
 		req["start_cursor"] = cursor
 	}
 
-	resp, err := SearchPages(os.Getenv("TIME_DB"), req)
+	resp, err := SearchPages(os.Getenv("TIMES_DB"), req)
 	if err != nil {
 		return nil, err
 	}
