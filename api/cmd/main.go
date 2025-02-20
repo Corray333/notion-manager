@@ -23,6 +23,11 @@ func main() {
 
 	// go gsheets.UpdateGoogleSheets()
 
+	// file, _ := os.ReadFile("test.md")
+	// _, tasks, _ := mindmap.ParseMarkdownTasks(string(file))
+	// j, _ := json.MarshalIndent(tasks, "", "    ")
+	// fmt.Println(string(j))
+
 	c := cron.New(cron.WithLocation(time.FixedZone("MSK", 3*60*60)))
 
 	_, err := c.AddFunc("0 5 * * *", func() { gsheets.UpdateGoogleSheets() })

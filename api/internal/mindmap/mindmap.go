@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -19,6 +20,10 @@ var linkRegex = regexp.MustCompile(`\[(.*?)\]\((.*?)\)`) // Regex для пои�
 
 func ParseMarkdownTasks(data string) (string, []Task, error) {
 
+	data = strings.Replace(data, "######", "		-", -1)
+	data = strings.Replace(data, "#####", "	-", -1)
+	data = strings.Replace(data, "####", "-", -1)
+
 	var tasks []Task
 	var currentTask *Task
 	var currentSubtask *Task
@@ -27,7 +32,9 @@ func ParseMarkdownTasks(data string) (string, []Task, error) {
 	scanner := bufio.NewScanner(strings.NewReader(data))
 
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+		lineRaw := scanner.Text()
+
+		line := strings.TrimSpace(lineRaw)
 
 		if strings.HasPrefix(line, "# ") {
 			projectName = line[2:]
@@ -40,13 +47,25 @@ func ParseMarkdownTasks(data string) (string, []Task, error) {
 		} else if strings.HasPrefix(line, "### ") {
 			title, link := extractLink(line[4:])
 			if currentTask != nil {
+				num, err := strconv.ParseFloat(title, 64)
+				if err == nil {
+					currentTask.Hours += num
+					continue
+				}
 				subtask := Task{Title: title, Link: link}
 				currentTask.Subtasks = append(currentTask.Subtasks, subtask)
 				currentSubtask = &currentTask.Subtasks[len(currentTask.Subtasks)-1]
 			}
 		} else if strings.HasPrefix(line, "- ") {
+			// Получить количество табов в начале строки и добавить его к тексту
+			tabs := strings.Count(lineRaw, "\t")
 			if currentSubtask != nil {
-				currentSubtask.Subpoints = append(currentSubtask.Subpoints, line[2:])
+				num, err := strconv.ParseFloat(line[2:], 64)
+				if err == nil {
+					currentSubtask.Hours += num
+					continue
+				}
+				currentSubtask.Subpoints = append(currentSubtask.Subpoints, strings.Repeat("  ", tabs)+line[2:])
 			} else if currentTask != nil {
 				currentTask.Subpoints = append(currentTask.Subpoints, line[2:])
 			}
