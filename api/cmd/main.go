@@ -24,9 +24,11 @@ func main() {
 	// go gsheets.UpdateGoogleSheets()
 
 	// file, _ := os.ReadFile("test.md")
-	// _, tasks, _ := mindmap.ParseMarkdownTasks(string(file))
+	// project, tasks, _ := mindmap.ParseMarkdownTasks(string(file))
 	// j, _ := json.MarshalIndent(tasks, "", "    ")
 	// fmt.Println(string(j))
+
+	// fmt.Println(notion.CreateMindmapTasks(project, tasks))
 
 	c := cron.New(cron.WithLocation(time.FixedZone("MSK", 3*60*60)))
 

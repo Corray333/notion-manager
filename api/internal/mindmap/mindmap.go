@@ -2,73 +2,58 @@ package mindmap
 
 import (
 	"bufio"
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 )
 
 type Task struct {
-	Title     string
-	Link      string
-	Hours     float64
-	Subpoints []string
-	Subtasks  []Task
+	Title    string  `json:"Title"`
+	Link     string  `json:"Link"`
+	Hours    float64 `json:"Hours"`
+	Subtasks []Task  `json:"Subtasks"`
 }
 
 var linkRegex = regexp.MustCompile(`\[(.*?)\]\((.*?)\)`) // Regex для поиска ссылок
 
 func ParseMarkdownTasks(data string) (string, []Task, error) {
-
-	data = strings.Replace(data, "######", "		-", -1)
-	data = strings.Replace(data, "#####", "	-", -1)
-	data = strings.Replace(data, "####", "-", -1)
-
 	var tasks []Task
-	var currentTask *Task
-	var currentSubtask *Task
+	var stack []*Task
 	var projectName string
 
 	scanner := bufio.NewScanner(strings.NewReader(data))
-
 	for scanner.Scan() {
-		lineRaw := scanner.Text()
+		line := scanner.Text()
+		level, content := detectLevel(line)
 
-		line := strings.TrimSpace(lineRaw)
+		if level == 0 {
+			projectName = content
+			continue
+		}
 
-		if strings.HasPrefix(line, "# ") {
-			projectName = line[2:]
-		} else if strings.HasPrefix(line, "## ") {
-			title, link := extractLink(line[3:])
-			task := Task{Title: title, Link: link}
+		title, link := extractLink(content)
+		if num, err := strconv.ParseFloat(title, 64); err == nil {
+			// Если строка - это число, добавляем в часы последней задачи
+			if len(stack) > 0 {
+				stack[len(stack)-1].Hours += num
+			}
+			continue
+		}
+
+		task := Task{Title: title, Link: link}
+
+		// Найдем родительский уровень
+		for len(stack) > 0 && len(stack) > level-1 {
+			stack = stack[:len(stack)-1]
+		}
+
+		if len(stack) == 0 {
 			tasks = append(tasks, task)
-			currentTask = &tasks[len(tasks)-1]
-			currentSubtask = nil
-		} else if strings.HasPrefix(line, "### ") {
-			title, link := extractLink(line[4:])
-			if currentTask != nil {
-				num, err := strconv.ParseFloat(title, 64)
-				if err == nil {
-					currentTask.Hours += num
-					continue
-				}
-				subtask := Task{Title: title, Link: link}
-				currentTask.Subtasks = append(currentTask.Subtasks, subtask)
-				currentSubtask = &currentTask.Subtasks[len(currentTask.Subtasks)-1]
-			}
-		} else if strings.HasPrefix(line, "- ") {
-			// Получить количество табов в начале строки и добавить его к тексту
-			tabs := strings.Count(lineRaw, "\t")
-			if currentSubtask != nil {
-				num, err := strconv.ParseFloat(line[2:], 64)
-				if err == nil {
-					currentSubtask.Hours += num
-					continue
-				}
-				currentSubtask.Subpoints = append(currentSubtask.Subpoints, strings.Repeat("  ", tabs)+line[2:])
-			} else if currentTask != nil {
-				currentTask.Subpoints = append(currentTask.Subpoints, line[2:])
-			}
+			stack = append(stack, &tasks[len(tasks)-1])
+		} else {
+			parent := stack[len(stack)-1]
+			parent.Subtasks = append(parent.Subtasks, task)
+			stack = append(stack, &parent.Subtasks[len(parent.Subtasks)-1])
 		}
 	}
 
@@ -76,7 +61,52 @@ func ParseMarkdownTasks(data string) (string, []Task, error) {
 		return "", nil, err
 	}
 
-	return projectName, tasks, nil
+	// Подсчитываем сумму часов для каждой задачи
+	for i := range tasks {
+		SumTaskHours(&tasks[i])
+	}
+
+	if len(tasks) == 1 {
+		return tasks[0].Title, tasks[0].Subtasks, nil
+	} else {
+		return projectName, tasks, nil
+	}
+}
+
+func SumTaskHours(task *Task) float64 {
+	sum := task.Hours
+	for i := range task.Subtasks {
+		sum += SumTaskHours(&task.Subtasks[i])
+	}
+	task.Hours = sum
+	return sum
+}
+
+func detectLevel(line string) (int, string) {
+	level := 0
+	tabCount := 0
+
+	for strings.HasPrefix(line, "    ") {
+		tabCount++
+		line = strings.TrimPrefix(line, "    ")
+	}
+
+	for strings.HasPrefix(line, "\t") {
+		tabCount++
+		line = strings.TrimPrefix(line, "\t")
+	}
+
+	for strings.HasPrefix(line, "#") {
+		level++
+		line = strings.TrimPrefix(line, "#")
+	}
+
+	if strings.HasPrefix(line, "-") {
+		level = tabCount + 4
+		line = strings.TrimPrefix(line, "-")
+	}
+
+	return level, strings.TrimSpace(line)
 }
 
 func extractLink(text string) (string, string) {
@@ -85,16 +115,4 @@ func extractLink(text string) (string, string) {
 		return match[1], match[2]
 	}
 	return text, ""
-}
-
-func PrintTasks(projectName string, tasks []Task, level int) {
-	fmt.Println("Project:", projectName)
-	prefix := strings.Repeat("  ", level)
-	for _, task := range tasks {
-		fmt.Println(prefix+"- "+task.Title, "(Link:", task.Link, ")")
-		for _, subpoint := range task.Subpoints {
-			fmt.Println(prefix+"  *", subpoint)
-		}
-		PrintTasks(projectName, task.Subtasks, level+1)
-	}
 }
